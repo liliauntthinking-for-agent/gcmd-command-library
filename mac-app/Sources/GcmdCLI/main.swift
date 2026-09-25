@@ -9,7 +9,7 @@ func printUsage() {
         gcmd - local-first command library
 
         Usage:
-          gcmd save [--title TITLE] [--tags TAGS] [--shell SHELL] [--cwd DIR] COMMAND
+          gcmd save [--title TITLE] [--tags TAGS] [--cwd DIR] COMMAND
           gcmd list [QUERY]
           gcmd pick
           gcmd update ID [--title TITLE] [--command COMMAND] [--tags TAGS]
@@ -18,7 +18,7 @@ func printUsage() {
           gcmd sync [--directory DIRECTORY] [--git]
           gcmd path
           gcmd launch search
-          gcmd launch save [--command COMMAND] [--cwd DIR] [--shell SHELL]
+          gcmd launch save [--command COMMAND] [--cwd DIR]
         """
     )
 }
@@ -95,7 +95,6 @@ do {
                     "--command", option("--command", in: args) ?? "",
                     "--title", option("--title", in: args) ?? "",
                     "--tags", option("--tags", in: args) ?? "",
-                    "--shell", option("--shell", in: args) ?? "",
                     "--cwd", option("--cwd", in: args) ?? "",
                     "--stdin"
                 ]
@@ -104,7 +103,6 @@ do {
         let draft = GcmdDraft(
             title: option("--title", in: args) ?? "",
             command: command,
-            shell: option("--shell", in: args) ?? (ProcessInfo.processInfo.environment["SHELL"].map { URL(fileURLWithPath: $0).lastPathComponent } ?? "zsh"),
             cwd: option("--cwd", in: args) ?? FileManager.default.currentDirectoryPath,
             tags: option("--tags", in: args) ?? ""
         )
@@ -129,7 +127,7 @@ do {
 
     case "pick":
         let args = Array(arguments.dropFirst())
-        let records = try store.search(option("--query", in: args) ?? "", shell: option("--shell", in: args))
+        let records = try store.search(option("--query", in: args) ?? "")
         guard !records.isEmpty else {
             printError("No commands found.")
             exit(1)
@@ -154,7 +152,6 @@ do {
                 title: option("--title", in: args) ?? current.title,
                 command: option("--command", in: args) ?? current.command,
                 description: current.description,
-                shell: option("--shell", in: args) ?? current.shell,
                 cwd: option("--cwd", in: args) ?? current.cwd ?? "",
                 tags: option("--tags", in: args) ?? current.tags.joined(separator: ", "),
                 variables: current.variables

@@ -46,7 +46,6 @@ final class AppModel: ObservableObject {
                 title: argument("--title", in: arguments) ?? "",
                 command: argument("--command", in: arguments) ?? "",
                 description: "",
-                shell: argument("--shell", in: arguments) ?? "zsh",
                 cwd: "",
                 tags: argument("--tags", in: arguments) ?? "",
                 variables: []
@@ -504,9 +503,6 @@ struct CommandRow: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Palette.text)
                         Spacer()
-                        Text(command.shell)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(Palette.muted)
                     }
                     Text(command.command)
                         .font(.system(size: 12, design: .monospaced))
@@ -593,13 +589,7 @@ struct EditorView: View {
                     )
 
                     PaletteField(label: "TITLE", placeholder: "给这条命令一个容易搜索的名字", text: $model.draft.title)
-                    HStack(spacing: 10) {
-                        PaletteField(label: "SHELL", placeholder: "zsh", text: $model.draft.shell)
-                        PaletteField(label: "TAGS", placeholder: "git, daily", text: $model.draft.tags)
-                    }
-                    Text("SHELL 只记录命令适用的 shell 类型，不会改变当前终端。")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Palette.muted)
+                    PaletteField(label: "TAGS", placeholder: "git, daily", text: $model.draft.tags)
 
                     HStack {
                         Text("VARIABLES")
@@ -756,7 +746,10 @@ struct ParameterView: View {
             .background(Palette.footer)
         }
         .onAppear {
-            focusedVariable = commandVariables.first?.name
+            let firstVariable = commandVariables.first?.name
+            DispatchQueue.main.async {
+                focusedVariable = firstVariable
+            }
         }
     }
 

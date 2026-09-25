@@ -14,7 +14,6 @@ final class GcmdCoreTests: XCTestCase {
                 title: "Git status",
                 command: "git status -sb",
                 description: "Show the current branch and working tree",
-                shell: "zsh",
                 cwd: "/tmp",
                 tags: "git, daily",
                 variables: [
@@ -31,7 +30,6 @@ final class GcmdCoreTests: XCTestCase {
                 title: "Git status updated",
                 command: "git status --short",
                 description: "Updated description",
-                shell: "zsh",
                 cwd: "/tmp",
                 tags: "git",
                 variables: [

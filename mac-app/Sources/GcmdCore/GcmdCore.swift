@@ -32,7 +32,6 @@ public struct GcmdCommand: Codable, Identifiable, Hashable {
     public var title: String
     public var command: String
     public var description: String
-    public var shell: String
     public var cwd: String?
     public var tags: [String]
     public var variables: [GcmdVariable]
@@ -46,7 +45,6 @@ public struct GcmdCommand: Codable, Identifiable, Hashable {
         title: String,
         command: String,
         description: String = "",
-        shell: String = "zsh",
         cwd: String? = nil,
         tags: [String] = [],
         variables: [GcmdVariable] = [],
@@ -59,7 +57,6 @@ public struct GcmdCommand: Codable, Identifiable, Hashable {
         self.title = title
         self.command = command
         self.description = description
-        self.shell = shell
         self.cwd = cwd
         self.tags = tags
         self.variables = variables
@@ -70,7 +67,7 @@ public struct GcmdCommand: Codable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, command, shell, cwd, tags
+        case id, title, command, cwd, tags
         case description, variables
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -84,7 +81,6 @@ public struct GcmdCommand: Codable, Identifiable, Hashable {
         title = try values.decode(String.self, forKey: .title)
         command = try values.decode(String.self, forKey: .command)
         description = try values.decodeIfPresent(String.self, forKey: .description) ?? ""
-        shell = try values.decodeIfPresent(String.self, forKey: .shell) ?? "zsh"
         cwd = try values.decodeIfPresent(String.self, forKey: .cwd)
         tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
         variables = try values.decodeIfPresent([GcmdVariable].self, forKey: .variables) ?? []
@@ -100,7 +96,6 @@ public struct GcmdDraft {
     public var title: String
     public var command: String
     public var description: String
-    public var shell: String
     public var cwd: String
     public var tags: String
     public var variables: [GcmdVariable]
@@ -110,7 +105,6 @@ public struct GcmdDraft {
         title: String = "",
         command: String = "",
         description: String = "",
-        shell: String = "zsh",
         cwd: String = "",
         tags: String = "",
         variables: [GcmdVariable] = []
@@ -119,7 +113,6 @@ public struct GcmdDraft {
         self.title = title
         self.command = command
         self.description = description
-        self.shell = shell
         self.cwd = cwd
         self.tags = tags
         self.variables = variables
@@ -131,7 +124,6 @@ public struct GcmdDraft {
             title: command.title,
             command: command.command,
             description: command.description,
-            shell: command.shell,
             cwd: command.cwd ?? "",
             tags: command.tags.joined(separator: ", "),
             variables: command.variables
@@ -257,21 +249,14 @@ public final class GcmdStore {
         return commands
     }
 
-    public func search(
-        _ query: String,
-        shell: String? = nil,
-        includeDeleted: Bool = false
-    ) throws -> [GcmdCommand] {
+    public func search(_ query: String, includeDeleted: Bool = false) throws -> [GcmdCommand] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return try list(includeDeleted: includeDeleted).filter { command in
-            let matchesShell = shell == nil || command.shell == shell || command.shell == "any"
-            guard matchesShell else { return false }
             guard !needle.isEmpty else { return true }
             return [
                 command.title,
                 command.command,
                 command.description,
-                command.shell,
                 command.tags.joined(separator: " "),
                 command.variables.map(\.name).joined(separator: " ")
             ]
@@ -293,7 +278,6 @@ public final class GcmdStore {
             title: draft.title.isEmpty ? Self.title(for: commandText) : draft.title,
             command: commandText,
             description: draft.description,
-            shell: draft.shell.isEmpty ? "zsh" : draft.shell,
             cwd: draft.cwd.isEmpty ? nil : draft.cwd,
             tags: Self.tags(from: draft.tags),
             variables: draft.variables.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
@@ -316,7 +300,6 @@ public final class GcmdStore {
         command.title = draft.title.isEmpty ? Self.title(for: commandText) : draft.title
         command.command = commandText
         command.description = draft.description
-        command.shell = draft.shell.isEmpty ? "zsh" : draft.shell
         command.cwd = draft.cwd.isEmpty ? nil : draft.cwd
         command.tags = Self.tags(from: draft.tags)
         command.variables = draft.variables.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -462,7 +445,9 @@ public final class GcmdStore {
         bind(command.title, to: statement, index: 2)
         bind(command.command, to: statement, index: 3)
         bind(command.description, to: statement, index: 4)
-        bind(command.shell, to: statement, index: 5)
+        // Keep the legacy SQLite column for existing databases, but do not
+        // expose shell as part of the command model or JSON format.
+        bind("zsh", to: statement, index: 5)
         bind(command.cwd, to: statement, index: 6)
         bind(Self.json(command.tags), to: statement, index: 7)
         bind(Self.json(command.variables), to: statement, index: 8)
@@ -480,7 +465,6 @@ public final class GcmdStore {
             let id = column(statement, 0),
             let title = column(statement, 1),
             let command = column(statement, 2),
-            let shell = column(statement, 4),
             let tagsJSON = column(statement, 6),
             let createdAt = column(statement, 8),
             let updatedAt = column(statement, 9)
@@ -493,7 +477,6 @@ public final class GcmdStore {
             title: title,
             command: command,
             description: column(statement, 3) ?? "",
-            shell: shell,
             cwd: column(statement, 5),
             tags: (try? decoder.decode([String].self, from: Data(tagsJSON.utf8))) ?? tags,
             variables: (try? decoder.decode(
@@ -613,7 +596,6 @@ public final class GcmdStore {
                         title: remoteRecord.title + " (conflict copy)",
                         command: remoteRecord.command,
                         description: remoteRecord.description,
-                        shell: remoteRecord.shell,
                         cwd: remoteRecord.cwd,
                         tags: Array(Set(remoteRecord.tags).union(["conflict"])).sorted(),
                         variables: remoteRecord.variables,

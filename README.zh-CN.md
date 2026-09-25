@@ -127,7 +127,7 @@ SQLite 数据库不会直接上传。每条命令会被保存成一个 JSON 文�
 两个设备同时修改同一条命令时，gcmd 会保留本地版本，并创建一个
 `(conflict copy)` 冲突副本，避免静默覆盖。
 
-完整流程请看 [SYNC.md](gcmd/SYNC.md)。
+完整流程请看 [SYNC.zh-CN.md](gcmd/SYNC.zh-CN.md)。
 
 ## 项目文件
 

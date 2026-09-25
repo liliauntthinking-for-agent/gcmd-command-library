@@ -22,8 +22,7 @@ if (( $+commands[gcmd] )); then
     zle -I
     gcmd launch save \
       --command "$BUFFER" \
-      --cwd "$PWD" \
-      --shell "${SHELL:t}"
+      --cwd "$PWD"
     zle reset-prompt
   }
 
