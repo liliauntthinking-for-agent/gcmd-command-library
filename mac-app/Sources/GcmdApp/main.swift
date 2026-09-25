@@ -187,6 +187,11 @@ final class AppModel: ObservableObject {
         mode = .search
     }
 
+    func cancelEditor() {
+        mode = .search
+        refresh()
+    }
+
     private func insertCommandText(_ commandText: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(commandText, forType: .string)
@@ -240,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.openNewCommand()
         }
         let rootView = PopupView(model: model) { [weak self] in
-            self?.closeAndExit()
+            self?.handleEscape()
         }
         let hosting = NSHostingView(rootView: rootView)
         let height: CGFloat = mode == .editor ? 680 : mode == .parameters ? 500 : 540
@@ -276,12 +281,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    private func handleEscape() {
+        if model.mode == .search {
+            closeAndExit()
+        } else if model.mode == .parameters {
+            model.cancelParameters()
+        } else {
+            model.cancelEditor()
+        }
+    }
+
     private func installKeyMonitor() {
         removeKeyMonitor()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if event.keyCode == 53 {
-                self.closeAndExit()
+                self.handleEscape()
                 return nil
             }
             if self.model.mode == .parameters {
@@ -421,31 +436,40 @@ struct SearchView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(model.filteredCommands) { command in
-                            CommandRow(
-                                command: command,
-                                selected: command.id == model.selectedID,
-                                onInsert: {
-                                    model.selectedID = command.id
-                                    model.insertSelected()
-                                },
-                                onSelect: {
-                                    model.selectedID = command.id
-                                },
-                                onEdit: {
-                                    model.openEditor(command)
-                                },
-                                onDelete: {
-                                    model.selectedID = command.id
-                                    model.deleteSelected()
-                                }
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 3) {
+                            ForEach(model.filteredCommands) { command in
+                                CommandRow(
+                                    command: command,
+                                    selected: command.id == model.selectedID,
+                                    onInsert: {
+                                        model.selectedID = command.id
+                                        model.insertSelected()
+                                    },
+                                    onSelect: {
+                                        model.selectedID = command.id
+                                    },
+                                    onEdit: {
+                                        model.openEditor(command)
+                                    },
+                                    onDelete: {
+                                        model.selectedID = command.id
+                                        model.deleteSelected()
+                                    }
+                                )
+                                .id(command.id)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
+                    }
+                    .onChange(of: model.selectedID) { selectedID in
+                        guard let selectedID else { return }
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            proxy.scrollTo(selectedID, anchor: .center)
                         }
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
                 }
             }
 
