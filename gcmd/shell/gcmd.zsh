@@ -1,21 +1,17 @@
 # gcmd shell integration for zsh.
 #
-# Add this directory's parent bin/ to PATH, then source this file from ~/.zshrc:
-#   source "/path/to/gcmd/shell/gcmd.zsh"
+# Add gcmd/bin to PATH, then source this file from ~/.zshrc:
+#   source "/path/to/gcmd-command-library/gcmd/shell/gcmd.zsh"
 #
-# Default shortcuts:
-#   Option-Space  Search and insert a command
-#   Option-S      Save the current input line
+# The app is launched only when a shortcut is pressed:
+#   Ctrl-G  Open command search
+#   Ctrl-X  Open the save editor with the current input
 
 if (( $+commands[gcmd] )); then
-  function _gcmd_pick_widget() {
-    local selected
-    selected="$(gcmd pick --shell "${SHELL:t}" --cwd "$PWD")" || return
-    if [[ -n "$selected" ]]; then
-      BUFFER="$selected"
-      CURSOR=${#BUFFER}
-      zle redisplay
-    fi
+  function _gcmd_search_widget() {
+    zle -I
+    gcmd launch search
+    zle reset-prompt
   }
 
   function _gcmd_save_widget() {
@@ -23,19 +19,23 @@ if (( $+commands[gcmd] )); then
       zle -M "gcmd: current input is empty"
       return
     fi
-    local message
-    message="$(gcmd save "$BUFFER" --shell "${SHELL:t}" --cwd "$PWD" 2>&1)" || {
-      zle -M "$message"
-      return
-    }
-    zle -M "$message"
-    zle redisplay
+    zle -I
+    gcmd launch save \
+      --command "$BUFFER" \
+      --cwd "$PWD" \
+      --shell "${SHELL:t}"
+    zle reset-prompt
   }
 
-  zle -N gcmd-pick _gcmd_pick_widget
+  zle -N gcmd-search _gcmd_search_widget
   zle -N gcmd-save _gcmd_save_widget
 
-  # macOS Option+Space and Option+S commonly arrive as ESC-prefixed sequences.
-  bindkey '^[ ' gcmd-pick
-  bindkey '^[s' gcmd-save
+  # Use single control bytes instead of ESC-prefixed sequences. In vi mode,
+  # ESC switches keymaps before a longer CSI sequence can be completed.
+  for keymap in emacs viins vicmd; do
+    bindkey -M "$keymap" $'\x1f' gcmd-search
+    bindkey -M "$keymap" $'\x1e' gcmd-save
+    bindkey -M "$keymap" $'\x07' gcmd-search
+    bindkey -M "$keymap" $'\x18' gcmd-save
+  done
 fi

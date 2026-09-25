@@ -3,8 +3,8 @@
 [中文文档](README.zh-CN.md)
 
 `gcmd` is a small local-first command library for Ghostty and other terminals.
-It does not open a permanent window. The CLI starts only when you save, search,
-or synchronize commands.
+It uses one Swift codebase for storage, the macOS popup app, the launcher, and
+Git synchronization.
 
 ## Install locally
 
@@ -22,12 +22,46 @@ echo 'source "/absolute/path/to/gcmd-command-library/gcmd/shell/gcmd.zsh"' >> ~/
 source ~/.zshrc
 ```
 
-The integration adds:
+The zsh integration launches the app only when a shortcut is pressed:
 
-- `Option-Space`: search and replace the current input line.
-- `Option-S`: save the current input line.
+- `Ctrl-G`: search and replace the current input line.
+- `Ctrl-X`: save the current input line.
 
 The selected command is inserted but never executed automatically.
+
+## macOS app
+
+Build the native popup app and Swift CLI:
+
+```bash
+./mac-app/build-app.sh
+```
+
+The app is on-demand. It opens a popup for one operation and exits after the
+operation is completed:
+
+- `Ctrl-G`: open command search.
+- `Ctrl-X`: open the save command editor.
+
+The app and `gcmd` launcher use the same Swift core and SQLite database.
+Selecting a command copies it to the clipboard and attempts to insert it into
+the focused Ghostty terminal through AppleScript. If macOS has not granted
+automation permission, paste it manually with `Cmd-V`.
+
+## zsh shortcuts
+
+The zsh widget binds control keys directly and launches the app on demand. No
+helper process remains alive, and the shortcuts work in any terminal running
+zsh after the integration is sourced:
+
+- `Ctrl-G`: open command search.
+- `Ctrl-X`: open the save editor.
+
+Reload your shell, then run:
+
+```bash
+source ~/.zshrc
+```
 
 ## CLI
 
@@ -36,9 +70,21 @@ gcmd save --title "Git status" --tags git,daily "git status -sb"
 gcmd list
 gcmd list git
 gcmd pick
+gcmd update COMMAND_ID --title "New title" --command "new command"
 gcmd delete COMMAND_ID
 gcmd path
 ```
+
+Commands can define placeholders such as:
+
+```text
+kubectl -n {{namespace}} get pods
+```
+
+Add `namespace` in the editor's `VARIABLES` section. When the command is
+inserted, gcmd asks for the values and substitutes them before sending the
+command to Ghostty. `WORKING DIRECTORY` records context only; it does not
+automatically change the current terminal directory.
 
 Data is stored in:
 

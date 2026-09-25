@@ -1,4 +1,12 @@
 #!/bin/sh
 set -eu
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-exec python3 "$SCRIPT_DIR/gcmd.py" "$@"
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+CLI="$ROOT/build/gcmd"
+
+if [ ! -x "$CLI" ]; then
+  printf '%s\n' "gcmd: build the Swift project first with ./mac-app/build-app.sh" >&2
+  exit 1
+fi
+
+exec "$CLI" "$@"

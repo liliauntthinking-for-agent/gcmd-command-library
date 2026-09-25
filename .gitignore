@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 .venv/
+build/
+.build/
 *.sqlite3
 *.sqlite3-journal
 *.sqlite3-wal

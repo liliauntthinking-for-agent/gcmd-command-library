@@ -3,8 +3,8 @@
 [English documentation](README.md)
 
 `gcmd` 是一个 local-first（本地优先）的命令库，适用于 Ghostty 以及其他
-terminal（终端）。它不会打开常驻窗口，只有在保存、搜索或同步命令时才会
-启动 CLI（命令行工具）。
+terminal（终端）。现在所有存储、搜索、编辑、同步和 macOS 界面都使用同一个
+Swift codebase（Swift 代码库）。
 
 ## 本地安装
 
@@ -22,12 +22,46 @@ echo 'source "/Users/hrzy/Desktop/gcmd-command-library/gcmd/shell/gcmd.zsh"' >> 
 source ~/.zshrc
 ```
 
-快捷键：
+zsh 集成只在按下快捷键时启动 app：
 
-- `Option-Space`：搜索命令并替换当前输入行。
-- `Option-S`：保存当前输入行。
+- `Ctrl-G`：搜索命令并替换当前输入行。
+- `Ctrl-X`：保存当前输入行。
 
 选中的命令只会插入，不会自动执行。
+
+## macOS App
+
+构建原生 popup（弹窗）应用和 Swift CLI：
+
+```bash
+./mac-app/build-app.sh
+```
+
+app 是按需启动的 one-shot app（一次性应用）：完成一次操作后自动退出。
+快捷键：
+
+- `Ctrl-G`：打开命令搜索。
+- `Ctrl-X`：打开保存命令编辑器。
+
+app 和 `gcmd` launcher（启动器）共用同一个 Swift core（核心层）以及 SQLite 数据库。
+选中命令后，app 会先复制到剪贴板，并尝试通过 AppleScript 插入当前聚焦的
+Ghostty terminal。如果 macOS 尚未允许自动化控制 Ghostty，可以手动按 `Cmd-V`
+粘贴。
+
+## zsh 快捷键
+
+zsh widget（zsh 输入组件）直接绑定 control key（控制键），按需启动 app。
+因此没有常驻 helper（辅助进程）；只要当前 terminal（终端）运行 zsh 并加载
+集成脚本，其他 terminal 也可以使用：
+
+- `Ctrl-G`：打开命令搜索。
+- `Ctrl-X`：打开保存编辑器。
+
+重新加载 shell，然后执行：
+
+```bash
+source ~/.zshrc
+```
 
 ## CLI 用法
 
@@ -36,9 +70,20 @@ gcmd save --title "Git 状态" --tags git,daily "git status -sb"
 gcmd list
 gcmd list git
 gcmd pick
+gcmd update COMMAND_ID --title "新标题" --command "新命令"
 gcmd delete COMMAND_ID
 gcmd path
 ```
+
+命令可以使用变量，例如：
+
+```text
+kubectl -n {{namespace}} get pods
+```
+
+在编辑器的 `VARIABLES` 区域添加 `namespace` 后，插入命令时会先弹出参数
+填写窗口，再把变量替换成实际值。`WORKING DIRECTORY` 只是记录这条命令
+所属的目录上下文，不会自动切换当前 terminal（终端）目录。
 
 本地数据存储在：
 
@@ -86,8 +131,9 @@ SQLite 数据库不会直接上传。每条命令会被保存成一个 JSON 文�
 
 ## 项目文件
 
-- `gcmd/gcmd.py`：核心 CLI。
+- `mac-app/Sources/GcmdCore/GcmdCore.swift`：共享存储、搜索和同步核心。
+- `mac-app/Sources/GcmdApp/main.swift`：macOS popup app。
+- `mac-app/Sources/GcmdCLI/main.swift`：Swift CLI 和 app launcher。
 - `gcmd/bin/gcmd`：可执行入口。
 - `gcmd/shell/gcmd.zsh`：zsh 快捷键集成。
-- `gcmd/tests/`：测试。
-- `ghostty-command-library-demo.html`：交互演示页面。
+- `mac-app/Tests/`：Swift 测试。
