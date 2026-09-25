@@ -60,8 +60,8 @@ final class AppModel: ObservableObject {
     func refresh() {
         do {
             commands = try store.list()
-            if selectedID == nil || !commands.contains(where: { $0.id == selectedID }) {
-                selectedID = commands.first?.id
+            if let selectedID, !commands.contains(where: { $0.id == selectedID }) {
+                self.selectedID = nil
             }
         } catch {
             showNotice(error.localizedDescription)
@@ -131,11 +131,13 @@ final class AppModel: ObservableObject {
     func moveSelection(by offset: Int) {
         let items = filteredCommands
         guard !items.isEmpty else { return }
-        let currentIndex = selectedID.flatMap { id in
-            items.firstIndex { $0.id == id }
-        } ?? 0
+        guard let currentID = self.selectedID else {
+            self.selectedID = items[0].id
+            return
+        }
+        let currentIndex = items.firstIndex { $0.id == currentID } ?? 0
         let nextIndex = min(max(currentIndex + offset, 0), items.count - 1)
-        selectedID = items[nextIndex].id
+        self.selectedID = items[nextIndex].id
     }
 
     func editSelected() {
@@ -144,7 +146,9 @@ final class AppModel: ObservableObject {
     }
 
     func insertSelected() {
-        guard let selected = commands.first(where: { $0.id == selectedID }) else {
+        guard let selected = selectedID.flatMap({ id in
+            commands.first { $0.id == id }
+        }) ?? filteredCommands.first else {
             showNotice("请先选择一条命令")
             return
         }
@@ -462,16 +466,13 @@ struct SearchView: View {
             .background(Palette.footer)
         }
         .onAppear {
-            if model.selectedID == nil {
-                model.selectedID = model.filteredCommands.first?.id
-            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 searchFocused = true
             }
         }
         .onChange(of: model.query) { _ in
             if !model.filteredCommands.contains(where: { $0.id == model.selectedID }) {
-                model.selectedID = model.filteredCommands.first?.id
+                model.selectedID = nil
             }
         }
     }
@@ -487,7 +488,13 @@ struct CommandRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: onInsert) {
+        Button {
+            if selected {
+                onInsert()
+            } else {
+                onSelect()
+            }
+        } label: {
             HStack(spacing: 12) {
                 Image(systemName: "terminal")
                     .font(.system(size: 14, weight: .medium))
@@ -529,13 +536,17 @@ struct CommandRow: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isHovered ? Palette.borderStrong : Color.clear, lineWidth: 1)
+                    .stroke(
+                        selected
+                            ? Palette.accent.opacity(0.32)
+                            : Color.clear,
+                        lineWidth: 1
+                    )
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .simultaneousGesture(TapGesture(count: 1).onEnded(onSelect))
         .contextMenu {
             Button("编辑", action: onEdit)
             Button("插入", action: onInsert)
@@ -773,7 +784,7 @@ private enum Palette {
     static let searchField = Color(red: 0.055, green: 0.064, blue: 0.082)
     static let footer = Color(red: 0.08, green: 0.09, blue: 0.11)
     static let selected = Color(red: 0.14, green: 0.23, blue: 0.18)
-    static let hovered = Color(red: 0.12, green: 0.16, blue: 0.14)
+    static let hovered = Color(red: 0.095, green: 0.12, blue: 0.105)
     static let iconBackground = Color(red: 0.15, green: 0.17, blue: 0.20)
     static let border = Color.white.opacity(0.09)
     static let borderStrong = Color.white.opacity(0.16)
