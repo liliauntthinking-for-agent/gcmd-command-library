@@ -6,6 +6,8 @@
 It uses one Swift codebase for storage, the macOS popup app, the launcher, and
 Git synchronization.
 
+Setup guide for another Mac: [Chinese setup guide](docs/SECOND-MAC-SETUP.zh-CN.md)
+
 ## Install locally
 
 From the project root:

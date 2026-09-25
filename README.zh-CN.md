@@ -6,6 +6,8 @@
 terminal（终端）。现在所有存储、搜索、编辑、同步和 macOS 界面都使用同一个
 Swift codebase（Swift 代码库）。
 
+另一台 Mac 的安装和同步流程请看：[安装同步指南](docs/SECOND-MAC-SETUP.zh-CN.md)
+
 ## 本地安装
 
 在项目根目录执行：
