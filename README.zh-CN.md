@@ -72,8 +72,12 @@ gcmd list git
 gcmd pick
 gcmd update COMMAND_ID --title "新标题" --command "新命令"
 gcmd delete COMMAND_ID
+gcmd import-warp
 gcmd path
 ```
+
+`gcmd import-warp` 会清空本地命令数据库，并从当前 Warp 的 SQLite 数据库导入
+全部命令。Warp 文件夹会转换成 tag（标签），Warp 参数会转换成命令变量。
 
 命令可以使用变量，例如：
 

@@ -72,8 +72,13 @@ gcmd list git
 gcmd pick
 gcmd update COMMAND_ID --title "New title" --command "new command"
 gcmd delete COMMAND_ID
+gcmd import-warp
 gcmd path
 ```
+
+`gcmd import-warp` clears the local command database and imports workflows
+from the current Warp SQLite database. Warp folder names become tags, and Warp
+arguments become command variables.
 
 Commands can define placeholders such as:
 

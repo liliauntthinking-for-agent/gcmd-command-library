@@ -144,6 +144,11 @@ public struct GcmdSyncResult {
     }
 }
 
+public struct GcmdWarpImportResult {
+    public let commandCount: Int
+    public let folderTagCount: Int
+}
+
 public enum GcmdError: LocalizedError {
     case message(String)
     case commandNotFound(String)
@@ -206,7 +211,6 @@ public final class GcmdStore {
                     title TEXT NOT NULL,
                     command TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
-                    shell TEXT NOT NULL,
                     cwd TEXT,
                     tags TEXT NOT NULL DEFAULT '[]',
                     variables TEXT NOT NULL DEFAULT '[]',
@@ -234,7 +238,7 @@ public final class GcmdStore {
     }
 
     public func list(includeDeleted: Bool = false) throws -> [GcmdCommand] {
-        let columns = "id, title, command, description, shell, cwd, tags, variables, created_at, updated_at, deleted_at, conflict_of"
+        let columns = "id, title, command, description, cwd, tags, variables, created_at, updated_at, deleted_at, conflict_of"
         let sql = includeDeleted
             ? "SELECT \(columns) FROM commands ORDER BY lower(title), updated_at"
             : "SELECT \(columns) FROM commands WHERE deleted_at IS NULL ORDER BY lower(title), updated_at"
@@ -318,6 +322,54 @@ public final class GcmdStore {
         try upsert(command)
     }
 
+    public func replaceWithWarpDatabase(at sourceURL: URL) throws -> GcmdWarpImportResult {
+        let imported = try readWarpWorkflows(from: sourceURL)
+        try execute("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            try execute("DELETE FROM commands")
+            var folderTagCount = 0
+            for item in imported {
+                let commandText = item.workflow.command.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !commandText.isEmpty else { continue }
+                var tags = item.workflow.tags
+                if let folder = item.folder, !folder.isEmpty {
+                    tags.append(folder)
+                    folderTagCount += 1
+                }
+                let variables = item.workflow.arguments.compactMap { argument -> GcmdVariable? in
+                    let name = argument.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { return nil }
+                    return GcmdVariable(
+                        name: name,
+                        defaultValue: argument.defaultValue ?? "",
+                        required: argument.defaultValue == nil
+                    )
+                }
+                let command = GcmdCommand(
+                    title: item.workflow.name,
+                    command: commandText,
+                    description: item.workflow.description ?? "",
+                    cwd: nil,
+                    tags: Self.uniqueTags(tags),
+                    variables: variables,
+                    createdAt: GcmdCore.now(),
+                    updatedAt: GcmdCore.now()
+                )
+                try upsert(command)
+            }
+            try execute("COMMIT")
+            return GcmdWarpImportResult(
+                commandCount: imported.filter {
+                    !$0.workflow.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }.count,
+                folderTagCount: folderTagCount
+            )
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
     public func syncDirectory() throws -> URL? {
         let config = try readConfig()
         return config["sync_dir"].flatMap { URL(fileURLWithPath: $0) }
@@ -384,9 +436,13 @@ public final class GcmdStore {
     }
 
     public static func tags(from value: String) -> [String] {
+        uniqueTags(value.split(separator: ",").map(String.init))
+    }
+
+    private static func uniqueTags(_ values: [String]) -> [String] {
         Array(
             Set(
-                value.split(separator: ",")
+                values
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
             )
@@ -423,13 +479,12 @@ public final class GcmdStore {
     private func upsert(_ command: GcmdCommand) throws {
         let sql = """
         INSERT INTO commands
-            (id, title, command, description, shell, cwd, tags, variables, created_at, updated_at, deleted_at, conflict_of)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, title, command, description, cwd, tags, variables, created_at, updated_at, deleted_at, conflict_of)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             title=excluded.title,
             command=excluded.command,
             description=excluded.description,
-            shell=excluded.shell,
             cwd=excluded.cwd,
             tags=excluded.tags,
             variables=excluded.variables,
@@ -445,16 +500,13 @@ public final class GcmdStore {
         bind(command.title, to: statement, index: 2)
         bind(command.command, to: statement, index: 3)
         bind(command.description, to: statement, index: 4)
-        // Keep the legacy SQLite column for existing databases, but do not
-        // expose shell as part of the command model or JSON format.
-        bind("zsh", to: statement, index: 5)
-        bind(command.cwd, to: statement, index: 6)
-        bind(Self.json(command.tags), to: statement, index: 7)
-        bind(Self.json(command.variables), to: statement, index: 8)
-        bind(command.createdAt, to: statement, index: 9)
-        bind(command.updatedAt, to: statement, index: 10)
-        bind(command.deletedAt, to: statement, index: 11)
-        bind(command.conflictOf, to: statement, index: 12)
+        bind(command.cwd, to: statement, index: 5)
+        bind(Self.json(command.tags), to: statement, index: 6)
+        bind(Self.json(command.variables), to: statement, index: 7)
+        bind(command.createdAt, to: statement, index: 8)
+        bind(command.updatedAt, to: statement, index: 9)
+        bind(command.deletedAt, to: statement, index: 10)
+        bind(command.conflictOf, to: statement, index: 11)
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw GcmdError.message("SQLite write failed")
         }
@@ -465,9 +517,9 @@ public final class GcmdStore {
             let id = column(statement, 0),
             let title = column(statement, 1),
             let command = column(statement, 2),
-            let tagsJSON = column(statement, 6),
-            let createdAt = column(statement, 8),
-            let updatedAt = column(statement, 9)
+            let tagsJSON = column(statement, 5),
+            let createdAt = column(statement, 7),
+            let updatedAt = column(statement, 8)
         else {
             throw GcmdError.message("invalid command record")
         }
@@ -477,16 +529,16 @@ public final class GcmdStore {
             title: title,
             command: command,
             description: column(statement, 3) ?? "",
-            cwd: column(statement, 5),
+            cwd: column(statement, 4),
             tags: (try? decoder.decode([String].self, from: Data(tagsJSON.utf8))) ?? tags,
             variables: (try? decoder.decode(
                 [GcmdVariable].self,
-                from: Data((column(statement, 7) ?? "[]").utf8)
+                from: Data((column(statement, 6) ?? "[]").utf8)
             )) ?? [],
             createdAt: createdAt,
             updatedAt: updatedAt,
-            deletedAt: column(statement, 10),
-            conflictOf: column(statement, 11)
+            deletedAt: column(statement, 9),
+            conflictOf: column(statement, 10)
         )
     }
 
@@ -529,6 +581,53 @@ public final class GcmdStore {
             records[command.id] = command
         }
         return records
+    }
+
+    private func readWarpWorkflows(from sourceURL: URL) throws -> [(workflow: WarpWorkflow, folder: String?)] {
+        var sourceDatabase: OpaquePointer?
+        let result = sqlite3_open_v2(
+            sourceURL.path,
+            &sourceDatabase,
+            SQLITE_OPEN_READONLY,
+            nil
+        )
+        guard result == SQLITE_OK, let sourceDatabase else {
+            throw GcmdError.message("cannot open Warp database: \(sourceURL.path)")
+        }
+        defer { sqlite3_close(sourceDatabase) }
+
+        let sql = """
+        SELECT w.data, f.name
+        FROM workflows w
+        LEFT JOIN object_metadata wm
+            ON wm.object_type = 'WORKFLOW'
+            AND wm.shareable_object_id = w.id
+        LEFT JOIN object_metadata fm
+            ON fm.object_type = 'FOLDER'
+            AND fm.server_id = wm.folder_id
+        LEFT JOIN folders f
+            ON f.id = fm.shareable_object_id
+        ORDER BY w.id
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(sourceDatabase, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw GcmdError.message("cannot read Warp workflows")
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var workflows: [(workflow: WarpWorkflow, folder: String?)] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard
+                let dataText = sqlite3_column_text(statement, 0)
+            else {
+                continue
+            }
+            let data = Data(bytes: dataText, count: Int(strlen(dataText)))
+            let workflow = try decoder.decode(WarpWorkflow.self, from: data)
+            let folder = sqlite3_column_text(statement, 1).map { String(cString: $0) }
+            workflows.append((workflow, folder))
+        }
+        return workflows
     }
 
     private func writeRecords(_ records: [String: GcmdCommand], to directory: URL) throws {
@@ -656,5 +755,42 @@ public final class GcmdStore {
     private static func json<T: Encodable>(_ value: T) -> String {
         let data = (try? JSONEncoder().encode(value)) ?? Data("[]".utf8)
         return String(data: data, encoding: .utf8) ?? "[]"
+    }
+}
+
+private struct WarpWorkflow: Decodable {
+    let name: String
+    let command: String
+    let tags: [String]
+    let description: String?
+    let arguments: [WarpArgument]
+
+    enum CodingKeys: String, CodingKey {
+        case name, command, tags, description, arguments
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decodeIfPresent(String.self, forKey: .name) ?? ""
+        command = try values.decodeIfPresent(String.self, forKey: .command) ?? ""
+        tags = try values.decodeIfPresent([String].self, forKey: .tags) ?? []
+        description = try values.decodeIfPresent(String.self, forKey: .description)
+        arguments = try values.decodeIfPresent([WarpArgument].self, forKey: .arguments) ?? []
+    }
+}
+
+private struct WarpArgument: Decodable {
+    let name: String
+    let defaultValue: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case defaultValue = "default_value"
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decodeIfPresent(String.self, forKey: .name) ?? ""
+        defaultValue = try values.decodeIfPresent(String.self, forKey: .defaultValue)
     }
 }

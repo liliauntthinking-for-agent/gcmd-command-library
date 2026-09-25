@@ -14,6 +14,7 @@ func printUsage() {
           gcmd pick
           gcmd update ID [--title TITLE] [--command COMMAND] [--tags TAGS]
           gcmd delete ID
+          gcmd import-warp [WARP_DATABASE]
           gcmd sync init DIRECTORY [--git]
           gcmd sync [--directory DIRECTORY] [--git]
           gcmd path
@@ -41,6 +42,13 @@ func appURL() -> URL {
         return URL(fileURLWithPath: value)
     }
     return URL(fileURLWithPath: "/Users/hrzy/Desktop/gcmd-command-library/build/gcmd.app")
+}
+
+func defaultWarpDatabaseURL() -> URL {
+    FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(
+            "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable/warp.sqlite"
+        )
 }
 
 func launchApp(_ args: [String]) -> Never {
@@ -163,6 +171,13 @@ do {
         guard arguments.count >= 2 else { throw GcmdError.message("delete requires an ID") }
         try store.delete(id: arguments[1])
         print("deleted \(arguments[1])")
+
+    case "import-warp":
+        let source = arguments.dropFirst().first.map { URL(fileURLWithPath: $0) }
+            ?? defaultWarpDatabaseURL()
+        let result = try store.replaceWithWarpDatabase(at: source)
+        print("imported \(result.commandCount) Warp commands")
+        print("added \(result.folderTagCount) folder tags")
 
     case "sync":
         let args = Array(arguments.dropFirst())
