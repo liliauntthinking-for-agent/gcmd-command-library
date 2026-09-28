@@ -39,6 +39,9 @@ zsh 集成只在按下快捷键时启动 app：
 ./mac-app/build-app.sh
 ```
 
+构建脚本会生成 `build/gcmd-macos-universal.zip`，同时支持 Apple Silicon 和
+Intel Mac。
+
 如果另一台 Mac 构建时出现 `Invalid manifest` 或 `PackageDescription`，
 请查看 [另一台 Mac 安装和同步指南](docs/SECOND-MAC-SETUP.zh-CN.md) 中的
 toolchain（工具链）修复步骤。

@@ -50,12 +50,27 @@ git clone \
 
 ## 4. Build macOS app
 
+推荐方式：从第一台 Mac 复制已经构建好的 `build/gcmd-macos-universal.zip`。
+这个包是 universal binary（通用二进制），同时支持 Apple Silicon 和 Intel Mac，
+第二台电脑不需要运行 SwiftPM（Swift 包管理器）。
+
+解压后保持 `gcmd.app`、`gcmd`、`gcmd.zsh` 在同一个 folder（目录）：
+
+```bash
+unzip gcmd-macos-universal.zip -d ~/Tools
+export PATH="$HOME/Tools/gcmd-macos-universal:$PATH"
+source "$HOME/Tools/gcmd-macos-universal/gcmd.zsh"
+```
+
+如果希望本机构建，再执行：
+
 ```bash
 cd ~/Desktop/gcmd-command-library
 ./mac-app/build-app.sh
 ```
 
-项目需要 Swift 和 macOS 13 或更高版本。
+构建产物同样在 `build/gcmd-macos-universal.zip`。项目需要 Swift 和
+macOS 13 或更高版本。
 
 如果出现 `Invalid manifest`、`PackageDescription` 或
 `Undefined symbols for architecture x86_64`，通常是 Xcode/Command Line Tools

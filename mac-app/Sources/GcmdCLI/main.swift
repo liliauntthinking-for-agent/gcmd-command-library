@@ -42,7 +42,34 @@ func appURL() -> URL {
     if let value = ProcessInfo.processInfo.environment["GCMD_APP"] {
         return URL(fileURLWithPath: value)
     }
-    return URL(fileURLWithPath: "/Users/hrzy/Desktop/gcmd-command-library/build/gcmd.app")
+
+    let executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
+    let executableDirectory = executableURL.deletingLastPathComponent()
+    if executableDirectory.lastPathComponent == "build" {
+        let siblingApp = executableDirectory.appendingPathComponent("gcmd.app")
+        if FileManager.default.fileExists(atPath: siblingApp.path) {
+            return siblingApp
+        }
+    }
+
+    var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    while directory.path != "/" {
+        let candidate = directory.appendingPathComponent("build/gcmd.app")
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+        directory = directory.deletingLastPathComponent()
+    }
+
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let candidates = [
+        URL(fileURLWithPath: "/Applications/gcmd.app"),
+        home.appendingPathComponent("Applications/gcmd.app")
+    ]
+    return candidates.first {
+        FileManager.default.fileExists(atPath: $0.path)
+    } ?? URL(fileURLWithPath: "/Applications/gcmd.app")
 }
 
 func defaultWarpDatabaseURL() -> URL {

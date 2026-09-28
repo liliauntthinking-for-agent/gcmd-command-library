@@ -39,6 +39,9 @@ Build the native popup app and Swift CLI:
 ./mac-app/build-app.sh
 ```
 
+The script creates a universal macOS package at
+`build/gcmd-macos-universal.zip`. It supports Apple Silicon and Intel Macs.
+
 The app is on-demand. It opens a popup for one operation and exits after the
 operation is completed:
 
