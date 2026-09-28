@@ -314,7 +314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let height: CGFloat = mode == .editor ? 680 : mode == .parameters ? 500 : 540
         let popup = GcmdPanel(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: height),
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
