@@ -47,11 +47,9 @@ func appURL() -> URL {
     let executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
         .resolvingSymlinksInPath()
     let executableDirectory = executableURL.deletingLastPathComponent()
-    if executableDirectory.lastPathComponent == "build" {
-        let siblingApp = executableDirectory.appendingPathComponent("gcmd.app")
-        if FileManager.default.fileExists(atPath: siblingApp.path) {
-            return siblingApp
-        }
+    let siblingApp = executableDirectory.appendingPathComponent("gcmd.app")
+    if FileManager.default.fileExists(atPath: siblingApp.path) {
+        return siblingApp
     }
 
     var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -129,11 +127,15 @@ func isQuarantined(_ url: URL) -> Bool {
 }
 
 func shellIntegrationCandidate() -> URL? {
-    var directories = [
-        URL(fileURLWithPath: CommandLine.arguments[0])
-            .resolvingSymlinksInPath()
-            .deletingLastPathComponent()
-    ]
+    var directories: [URL] = []
+    var executableDirectory = URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
+        .deletingLastPathComponent()
+    while executableDirectory.path != "/" {
+        directories.append(executableDirectory)
+        executableDirectory = executableDirectory.deletingLastPathComponent()
+    }
+
     var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     while directory.path != "/" {
         directories.append(directory)
