@@ -6,7 +6,7 @@
 terminal（终端）。现在所有存储、搜索、编辑、同步和 macOS 界面都使用同一个
 Swift codebase（Swift 代码库）。
 
-另一台 Mac 的安装和同步流程请看：[安装同步指南](docs/SECOND-MAC-SETUP.zh-CN.md)
+打包分发和目标 Mac 安装流程请看：[安装包指南](docs/PACKAGE-SETUP.zh-CN.md)
 
 ## 本地安装
 
@@ -19,8 +19,8 @@ export PATH="$PWD/gcmd/bin:$PATH"
 如果希望永久启用 zsh 集成：
 
 ```bash
-echo 'export PATH="/Users/hrzy/Desktop/gcmd-command-library/gcmd/bin:$PATH"' >> ~/.zshrc
-echo 'source "/Users/hrzy/Desktop/gcmd-command-library/gcmd/shell/gcmd.zsh"' >> ~/.zshrc
+echo 'export PATH="/absolute/path/to/gcmd-command-library/gcmd/bin:$PATH"' >> ~/.zshrc
+echo 'source "/absolute/path/to/gcmd-command-library/gcmd/shell/gcmd.zsh"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -47,10 +47,6 @@ zsh 集成只在按下快捷键时启动 app：
 ./mac-app/build-app.sh --arch universal
 ./mac-app/build-app.sh --arch all
 ```
-
-如果另一台 Mac 构建时出现 `Invalid manifest` 或 `PackageDescription`，
-请查看 [另一台 Mac 安装和同步指南](docs/SECOND-MAC-SETUP.zh-CN.md) 中的
-toolchain（工具链）修复步骤。
 
 app 是按需启动的 one-shot app（一次性应用）：完成一次操作后自动退出。
 快捷键：
@@ -122,18 +118,18 @@ kubectl -n {{namespace}} get pods
 
 `gcmd doctor` 会显示本地命令数量、sync directory（同步目录）、Git remote
 （远程地址）、app path（应用路径）、quarantine（隔离标记）和 zsh integration
-（zsh 集成）状态。如果另一台 Mac 上快捷键或同步异常，先执行这个命令。
+（zsh 集成）状态。如果目标 Mac 上快捷键或同步异常，先执行这个命令。
 
 ## Git 远程同步
 
-先在 Codeup、GitHub、GitLab 或 Gitea 创建一个 private repository（私有仓库），
+先在 GitHub、GitLab 或 Gitea 创建一个 private repository（私有仓库），
 然后在第一台 Mac 上执行：
 
 ```bash
-git clone git@codeup.aliyun.com:你的项目路径/gcmd-command-library.git \
-  ~/Documents/private-command-library
+git clone git@github-lili.com:liliauntthinking-for-agent/gcmd-command-library-data.git \
+  ~/Documents/gcmd-command-library-data
 
-gcmd sync init ~/Documents/private-command-library
+gcmd sync init ~/Documents/gcmd-command-library-data
 gcmd sync --git
 ```
 

@@ -6,7 +6,7 @@
 It uses one Swift codebase for storage, the macOS popup app, the launcher, and
 Git synchronization.
 
-Setup guide for another Mac: [Chinese setup guide](docs/SECOND-MAC-SETUP.zh-CN.md)
+Package distribution and target-Mac setup: [Chinese package guide](docs/PACKAGE-SETUP.zh-CN.md)
 
 ## Install locally
 
@@ -48,6 +48,11 @@ architecture when needed:
 ./mac-app/build-app.sh --arch universal
 ./mac-app/build-app.sh --arch all
 ```
+
+Copy the matching package in `build/` to another Mac. The target Mac does not
+need Xcode or SwiftPM. See
+[PACKAGE-SETUP.zh-CN.md](docs/PACKAGE-SETUP.zh-CN.md) for the transfer and
+installation steps.
 
 The app is on-demand. It opens a popup for one operation and exits after the
 operation is completed:
@@ -119,9 +124,9 @@ Data is stored in:
 
 Set `GCMD_HOME` to use another data directory, which is useful for tests.
 
-`gcmd doctor` reports the database count, sync-directory state, Git remote,
-app path, quarantine flag, and zsh integration. Use it when shortcuts or sync
-do not work on another Mac.
+`gcmd doctor` reports the executable path, database count, sync-directory
+state, Git remote, app path, quarantine flag, and zsh integration. Use it when
+shortcuts or sync do not work on a target Mac.
 
 ## Git synchronization
 
@@ -130,7 +135,7 @@ Configure a local checkout of a private Git repository:
 ```bash
 gcmd sync init ~/Documents/private-command-library --git
 cd ~/Documents/private-command-library
-git remote add origin git@codeup.aliyun.com:YOUR_ACCOUNT/YOUR_PRIVATE_REPO.git
+git remote add origin git@github-lili.com:liliauntthinking-for-agent/gcmd-command-library-data.git
 ```
 
 Run a normal local reconciliation:

@@ -65,8 +65,8 @@ This performs:
 7. git push
 ```
 
-On the second Mac, install `gcmd`, configure the same repository, and run the
-same command:
+On the target Mac, install the built package, configure the same repository,
+and run the same command:
 
 ```bash
 gcmd sync init ~/Documents/private-command-library
