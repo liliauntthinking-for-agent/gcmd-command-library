@@ -1155,6 +1155,7 @@ private enum Palette {
     static let selected = Color(red: 0.14, green: 0.23, blue: 0.18)
     static let hovered = Color(red: 0.095, green: 0.12, blue: 0.105)
     static let iconBackground = Color(red: 0.15, green: 0.17, blue: 0.20)
+    static let buttonHovered = Color(red: 0.21, green: 0.26, blue: 0.32)
     static let border = Color.white.opacity(0.09)
     static let borderStrong = Color.white.opacity(0.16)
     static let text = Color(red: 0.92, green: 0.94, blue: 0.96)
@@ -1193,24 +1194,69 @@ struct PaletteButtonStyle: ButtonStyle {
     var destructive = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        PaletteHoverableButtonLabel(
+            primary: primary,
+            destructive: destructive
+        ) {
+            configuration.label
+        }
+        .scaleEffect(configuration.isPressed ? 0.98 : 1)
+        .opacity(configuration.isPressed ? 0.82 : 1)
+        .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct PaletteHoverableButtonLabel<Label: View>: View {
+    let primary: Bool
+    let destructive: Bool
+    @ViewBuilder let label: () -> Label
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
+        label()
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(
-                primary ? Palette.panel :
-                    destructive ? Color(red: 0.95, green: 0.56, blue: 0.56) : Palette.text
-            )
+            .foregroundStyle(foregroundColor)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
-                primary ? Palette.accent :
-                    destructive ? Color.red.opacity(0.10) : Palette.iconBackground,
+                backgroundColor,
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(primary ? Palette.accent.opacity(0.7) : Palette.border, lineWidth: 1)
+                    .stroke(borderColor, lineWidth: 1)
             )
-            .opacity(configuration.isPressed ? 0.72 : 1)
+            .opacity(isEnabled ? 1 : 0.48)
+            .onHover { hovered in
+                guard isEnabled else { return }
+                isHovered = hovered
+            }
+            .onDisappear {
+                isHovered = false
+            }
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var foregroundColor: Color {
+        if primary { return Palette.panel }
+        return destructive ? Palette.destructive : Palette.text
+    }
+
+    private var backgroundColor: Color {
+        if primary {
+            return isHovered ? Palette.accent.opacity(0.88) : Palette.accent
+        }
+        if destructive {
+            return isHovered ? Color.red.opacity(0.17) : Color.red.opacity(0.10)
+        }
+        return isHovered ? Palette.buttonHovered : Palette.iconBackground
+    }
+
+    private var borderColor: Color {
+        if primary { return Palette.accent.opacity(isHovered ? 0.9 : 0.7) }
+        return isHovered ? Palette.borderStrong : Palette.border
     }
 }
 
