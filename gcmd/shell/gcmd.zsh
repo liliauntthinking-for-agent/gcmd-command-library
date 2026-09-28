@@ -1,16 +1,40 @@
 # gcmd shell integration for zsh.
 #
-# Add gcmd/bin to PATH, then source this file from ~/.zshrc:
+# Source this file from ~/.zshrc:
 #   source "/path/to/gcmd-command-library/gcmd/shell/gcmd.zsh"
 #
 # The app is launched only when a shortcut is pressed:
 #   Ctrl-G  Open command search
 #   Ctrl-X  Open the save editor with the current input
 
-if (( $+commands[gcmd] )); then
+typeset -g _GCMD_INTEGRATION_DIR="${${(%):-%x}:A:h}"
+typeset -g _GCMD_PACKAGE_DIR="$_GCMD_INTEGRATION_DIR"
+
+# Repository checkouts keep the shell file at gcmd/shell/gcmd.zsh.
+if [[ ! -f "$_GCMD_PACKAGE_DIR/gcmd" && -f "$_GCMD_INTEGRATION_DIR/../gcmd" ]]; then
+  _GCMD_PACKAGE_DIR="$_GCMD_INTEGRATION_DIR/.."
+fi
+if [[ ! -f "$_GCMD_PACKAGE_DIR/gcmd" && -f "$_GCMD_INTEGRATION_DIR/../../build/gcmd" ]]; then
+  _GCMD_PACKAGE_DIR="$_GCMD_INTEGRATION_DIR/../../build"
+fi
+
+_GCMD_PACKAGE_DIR="${_GCMD_PACKAGE_DIR:A}"
+if [[ -d "$_GCMD_PACKAGE_DIR/gcmd.app" ]]; then
+  export GCMD_APP="$_GCMD_PACKAGE_DIR/gcmd.app"
+fi
+
+if [[ -x "$_GCMD_PACKAGE_DIR/gcmd" ]]; then
+  typeset -g _GCMD_CLI="$_GCMD_PACKAGE_DIR/gcmd"
+  path=("$_GCMD_PACKAGE_DIR" $path)
+  export PATH
+else
+  _GCMD_CLI="$(command -v gcmd)"
+fi
+
+if [[ -n "$_GCMD_CLI" ]]; then
   function _gcmd_launch() {
     local output
-    if ! output="$(gcmd launch "$@" 2>&1)"; then
+    if ! output="$("$_GCMD_CLI" launch "$@" 2>&1)"; then
       zle -M "gcmd: $output"
     fi
   }
