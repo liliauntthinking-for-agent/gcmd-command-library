@@ -49,9 +49,7 @@ final class AppModel: ObservableObject {
     var availableTags: [GcmdTagSummary] {
         Dictionary(grouping: commands.flatMap(\.tags), by: { $0 })
             .map { GcmdTagSummary(name: $0.key, count: $0.value.count) }
-            .sorted {
-                $0.count == $1.count ? $0.name.lowercased() < $1.name.lowercased() : $0.count > $1.count
-            }
+            .sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
 
     var dataDirectoryURL: URL {
