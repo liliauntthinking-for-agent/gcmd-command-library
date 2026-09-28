@@ -20,6 +20,7 @@ func printUsage() {
           gcmd path
           gcmd launch search
           gcmd launch save [--command COMMAND] [--cwd DIR]
+          gcmd launch sync
         """
     )
 }
@@ -64,6 +65,8 @@ func launchApp(_ args: [String]) -> Never {
         appArguments = ["--search"]
     case "save":
         appArguments = ["--save"] + Array(args.dropFirst())
+    case "sync":
+        appArguments = ["--sync"]
     default:
         printError("gcmd: unknown launch action: \(action)")
         exit(2)

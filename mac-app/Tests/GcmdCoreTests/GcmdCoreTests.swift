@@ -103,4 +103,20 @@ final class GcmdCoreTests: XCTestCase {
         XCTAssertTrue(commands.contains { $0.command == "echo local" })
         XCTAssertTrue(commands.contains { $0.command == "echo remote" })
     }
+
+    func testRemoteRepositoryConfigurationPreservesSyncDirectory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gcmd-remote-\(UUID().uuidString)")
+        let database = root.appendingPathComponent("database")
+        let remote = root.appendingPathComponent("remote")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = try GcmdStore(dataDirectory: database)
+        try store.configureSyncDirectory(remote, initializeGit: true)
+        let configuredURL = "git@example.com:account/repository.git"
+        try store.setRemoteRepository(configuredURL)
+
+        XCTAssertEqual(try store.syncDirectory()?.standardizedFileURL.path, remote.standardizedFileURL.path)
+        XCTAssertEqual(store.remoteRepositoryURL(), configuredURL)
+    }
 }

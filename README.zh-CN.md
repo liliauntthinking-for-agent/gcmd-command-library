@@ -53,6 +53,9 @@ app 运行期间，macOS 菜单栏会暂时显示一个 terminal 图标。popup�
 后 app 自动退出，图标也会消失。点击图标可以进入搜索、新建命令、同步、打开
 数据目录和退出等功能。
 
+同步操作会打开 progress window（进度窗口），实时显示 Git 输出；也可以保存
+和测试远程数据仓库地址，或在网络等待过久时取消同步。
+
 app 和 `gcmd` launcher（启动器）共用同一个 Swift core（核心层）以及 SQLite 数据库。
 选中命令后，app 会先复制到剪贴板，并尝试通过 AppleScript 插入当前聚焦的
 Ghostty terminal。如果 macOS 尚未允许自动化控制 Ghostty，可以手动按 `Cmd-V`

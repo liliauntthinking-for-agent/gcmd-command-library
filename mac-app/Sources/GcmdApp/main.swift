@@ -8,6 +8,7 @@ enum PopupMode {
     case search
     case editor
     case parameters
+    case sync
 }
 
 @MainActor
@@ -22,10 +23,16 @@ final class AppModel: ObservableObject {
     @Published var pendingCommand: GcmdCommand?
     @Published var selectedID: String?
     @Published var notice = ""
+    @Published var remoteURLText = ""
+    @Published var syncPhase = ""
+    @Published var syncLogs: [String] = []
+    @Published var isSyncing = false
+    @Published var syncResult = ""
 
     var onFinish: (() -> Void)?
     private let store: GcmdStore
     private var noticeTask: Task<Void, Never>?
+    private var syncTask: Task<Void, Never>?
 
     init() {
         do {
@@ -44,7 +51,9 @@ final class AppModel: ObservableObject {
     }
 
     func configure(arguments: [String]) {
-        if arguments.contains("--save") {
+        if arguments.contains("--sync") {
+            openSync()
+        } else if arguments.contains("--save") {
             mode = .editor
             draft = GcmdDraft(
                 title: argument("--title", in: arguments) ?? "",
@@ -196,12 +205,119 @@ final class AppModel: ObservableObject {
         refresh()
     }
 
-    func sync() {
+    func openSync() {
+        mode = .sync
+        remoteURLText = store.remoteRepositoryURL() ?? ""
+        syncPhase = "准备同步"
+        syncLogs = []
+        syncResult = ""
+        isSyncing = false
+    }
+
+    func startSync() {
+        guard !isSyncing else { return }
+        isSyncing = true
+        syncResult = ""
+        syncPhase = "同步中"
+        appendSyncLog("开始同步")
+        let store = self.store
+        syncTask = Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let result = try store.sync(useGit: true) { item in
+                    Task { @MainActor [weak self] in
+                        self?.syncPhase = item.message
+                        self?.appendSyncLog(item.message)
+                    }
+                }
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "同步完成"
+                    self?.syncResult = result.summary
+                    self?.appendSyncLog(result.summary)
+                    self?.refresh()
+                }
+            } catch is CancellationError {
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "已取消"
+                    self?.appendSyncLog("同步已取消")
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "同步失败"
+                    self?.syncResult = error.localizedDescription
+                    self?.appendSyncLog("错误：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func saveRemoteURL() {
+        guard !isSyncing else { return }
         do {
-            let result = try store.sync(useGit: true)
-            showNotice(result.summary)
+            try store.setRemoteRepository(remoteURLText)
+            appendSyncLog("远程地址已保存")
+            showNotice("远程地址已保存")
         } catch {
+            appendSyncLog("错误：\(error.localizedDescription)")
             showNotice(error.localizedDescription)
+        }
+    }
+
+    func testRemoteURL() {
+        guard !isSyncing else { return }
+        do {
+            try store.setRemoteRepository(remoteURLText)
+        } catch {
+            appendSyncLog("错误：\(error.localizedDescription)")
+            return
+        }
+
+        isSyncing = true
+        syncPhase = "测试远程连接"
+        syncResult = ""
+        appendSyncLog("测试远程连接")
+        let store = self.store
+        syncTask = Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                try store.testRemoteRepository { line in
+                    Task { @MainActor [weak self] in
+                        self?.appendSyncLog(line)
+                    }
+                }
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "远程连接正常"
+                    self?.appendSyncLog("远程连接正常")
+                }
+            } catch is CancellationError {
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "已取消"
+                    self?.appendSyncLog("连接测试已取消")
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.isSyncing = false
+                    self?.syncPhase = "远程连接失败"
+                    self?.appendSyncLog("错误：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func cancelSyncWork() {
+        guard isSyncing else { return }
+        syncTask?.cancel()
+        syncPhase = "正在取消"
+        appendSyncLog("正在取消当前 Git 操作")
+    }
+
+    private func appendSyncLog(_ message: String) {
+        syncLogs.append(message)
+        if syncLogs.count > 300 {
+            syncLogs.removeFirst(syncLogs.count - 300)
         }
     }
 
@@ -285,8 +401,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuSync() {
-        model.sync()
-        closeAndExit()
+        model.openSync()
+        showPopup(mode: .sync)
+        model.startSync()
     }
 
     @objc private func menuOpenDataDirectory() {
@@ -354,6 +471,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             closeAndExit()
         } else if model.mode == .parameters {
             model.cancelParameters()
+        } else if model.mode == .sync, model.isSyncing {
+            model.cancelSyncWork()
         } else {
             model.cancelEditor()
         }
@@ -418,6 +537,8 @@ struct PopupView: View {
                     SearchView(model: model)
                 } else if model.mode == .parameters {
                     ParameterView(model: model)
+                } else if model.mode == .sync {
+                    SyncView(model: model, close: close)
                 } else {
                     EditorView(model: model, close: close)
                 }
@@ -434,7 +555,7 @@ struct PopupView: View {
         }
         .frame(
             width: 680,
-            height: model.mode == .editor ? 680 : model.mode == .parameters ? 500 : 540
+            height: syncHeight(for: model.mode)
         )
         .background(Palette.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -443,6 +564,15 @@ struct PopupView: View {
         )
         .preferredColorScheme(.dark)
         .onExitCommand(perform: close)
+    }
+}
+
+private func syncHeight(for mode: PopupMode) -> CGFloat {
+    switch mode {
+    case .editor: return 680
+    case .parameters: return 500
+    case .sync: return 620
+    case .search: return 540
     }
 }
 
@@ -871,6 +1001,153 @@ struct ParameterView: View {
     }
 }
 
+struct SyncView: View {
+    @ObservedObject var model: AppModel
+    let close: () -> Void
+    @FocusState private var remoteFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(Palette.accent)
+                Text("同步命令")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                Spacer()
+                KeyHint("esc")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("REMOTE DATA REPOSITORY")
+                    .paletteLabel()
+                TextField(
+                    "git@github.com:account/repository.git",
+                    text: $model.remoteURLText
+                )
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Palette.text)
+                .focused($remoteFocused)
+                .disabled(model.isSyncing)
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background(Palette.searchField, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Palette.border, lineWidth: 1)
+                )
+
+                HStack {
+                    Button("保存地址") { model.saveRemoteURL() }
+                        .buttonStyle(PaletteButtonStyle())
+                        .disabled(model.isSyncing)
+                    Button("测试连接") { model.testRemoteURL() }
+                        .buttonStyle(PaletteButtonStyle())
+                        .disabled(model.isSyncing)
+                    Spacer()
+                    Button {
+                        model.saveRemoteURL()
+                        model.startSync()
+                    } label: {
+                        Label("立即同步", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(PaletteButtonStyle(primary: true))
+                    .disabled(model.isSyncing)
+                }
+            }
+            .padding(.horizontal, 18)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    if model.isSyncing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: statusIcon)
+                            .foregroundStyle(statusColor)
+                    }
+                    Text(model.syncPhase)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.text)
+                    Spacer()
+                    if !model.syncResult.isEmpty {
+                        Text(model.syncResult)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                    }
+                }
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(model.syncLogs.enumerated()), id: \.offset) { index, line in
+                                Text(line)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(line.hasPrefix("错误：") ? Palette.destructive : Palette.command)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id(index)
+                            }
+                        }
+                        .padding(10)
+                    }
+                    .background(Palette.searchField, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Palette.border, lineWidth: 1)
+                    )
+                    .onChange(of: model.syncLogs.count) { _ in
+                        if let last = model.syncLogs.indices.last {
+                            proxy.scrollTo(last, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 18)
+            .frame(maxHeight: .infinity)
+
+            HStack {
+                Text("Git 输出会实时显示，避免网络等待时没有反馈。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.muted)
+                Spacer()
+                Button("取消同步") { model.cancelSyncWork() }
+                    .buttonStyle(PaletteButtonStyle(destructive: true))
+                    .disabled(!model.isSyncing)
+                Button("关闭") { close() }
+                    .buttonStyle(PaletteButtonStyle(primary: true))
+                    .disabled(model.isSyncing)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 13)
+            .background(Palette.footer)
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                remoteFocused = true
+            }
+        }
+    }
+
+    private var statusIcon: String {
+        model.syncPhase == "同步失败" || model.syncPhase == "远程连接失败"
+            ? "exclamationmark.triangle"
+            : model.syncResult.isEmpty ? "circle.dotted" : "checkmark.circle"
+    }
+
+    private var statusColor: Color {
+        model.syncPhase == "同步失败" || model.syncPhase == "远程连接失败"
+            ? Palette.destructive
+            : model.syncResult.isEmpty ? Palette.muted : Palette.accent
+    }
+}
+
 private enum Palette {
     static let panel = Color(red: 0.105, green: 0.118, blue: 0.145)
     static let searchField = Color(red: 0.055, green: 0.064, blue: 0.082)
@@ -886,6 +1163,7 @@ private enum Palette {
     static let accent = Color(red: 0.52, green: 0.83, blue: 0.60)
     static let accentMuted = Color(red: 0.48, green: 0.68, blue: 0.53)
     static let accentSoft = Color(red: 0.16, green: 0.31, blue: 0.20)
+    static let destructive = Color(red: 0.95, green: 0.56, blue: 0.56)
     static let notice = Color(red: 0.16, green: 0.30, blue: 0.20)
 }
 

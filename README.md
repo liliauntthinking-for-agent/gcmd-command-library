@@ -49,6 +49,9 @@ While the app is active, a temporary terminal icon appears in the macOS menu
 bar. It disappears automatically when the popup exits. Its menu provides
 search, new command, sync, data directory, and quit actions.
 
+The sync action opens a progress window with live Git output. It also lets you
+save and test the remote data-repository URL, and cancel a long-running sync.
+
 The app and `gcmd` launcher use the same Swift core and SQLite database.
 Selecting a command copies it to the clipboard and attempts to insert it into
 the focused Ghostty terminal through AppleScript. If macOS has not granted

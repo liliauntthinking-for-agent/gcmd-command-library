@@ -144,6 +144,20 @@ public struct GcmdSyncResult {
     }
 }
 
+public struct GcmdSyncProgress {
+    public enum Phase: String {
+        case pull
+        case merge
+        case stage
+        case commit
+        case push
+        case complete
+    }
+
+    public let phase: Phase
+    public let message: String
+}
+
 public struct GcmdWarpImportResult {
     public let commandCount: Int
     public let folderTagCount: Int
@@ -375,6 +389,53 @@ public final class GcmdStore {
         return config["sync_dir"].flatMap { URL(fileURLWithPath: $0) }
     }
 
+    public func remoteRepositoryURL() -> String? {
+        let config = (try? readConfig()) ?? [:]
+        if let configuredURL = config["remote_url"], !configuredURL.isEmpty {
+            return configuredURL
+        }
+        guard let directory = try? syncDirectory(),
+              FileManager.default.fileExists(atPath: directory.appendingPathComponent(".git").path)
+        else {
+            return nil
+        }
+        return (try? runGit(["remote", "get-url", "origin"], in: directory))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public func setRemoteRepository(_ value: String) throws {
+        let remoteURL = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !remoteURL.isEmpty else {
+            throw GcmdError.message("remote repository URL is required")
+        }
+        guard let directory = try syncDirectory() else {
+            throw GcmdError.syncDirectoryNotConfigured
+        }
+        if !FileManager.default.fileExists(atPath: directory.appendingPathComponent(".git").path) {
+            _ = try runGit(["init", "--initial-branch=main"], in: directory)
+        }
+        let remove = try? runGit(["remote", "remove", "origin"], in: directory)
+        if remove == nil {
+            // A missing origin is expected for a newly initialized repository.
+        }
+        _ = try runGit(["remote", "add", "origin", remoteURL], in: directory)
+        var config = try readConfig()
+        config["remote_url"] = remoteURL
+        try writeConfig(config)
+    }
+
+    public func testRemoteRepository(progress: ((String) -> Void)? = nil) throws {
+        guard let directory = try syncDirectory() else {
+            throw GcmdError.syncDirectoryNotConfigured
+        }
+        progress?("git ls-remote origin")
+        _ = try runGitStreaming(
+            ["ls-remote", "--heads", "origin"],
+            in: directory,
+            progress: progress
+        )
+    }
+
     public func configureSyncDirectory(_ directory: URL, initializeGit: Bool) throws {
         try FileManager.default.createDirectory(
             at: directory,
@@ -387,10 +448,16 @@ public final class GcmdStore {
         if initializeGit, !FileManager.default.fileExists(atPath: directory.appendingPathComponent(".git").path) {
             _ = try runGit(["init"], in: directory)
         }
-        try writeConfig(["sync_dir": directory.standardizedFileURL.path])
+        var config = try readConfig()
+        config["sync_dir"] = directory.standardizedFileURL.path
+        try writeConfig(config)
     }
 
-    public func sync(directory: URL? = nil, useGit: Bool = false) throws -> GcmdSyncResult {
+    public func sync(
+        directory: URL? = nil,
+        useGit: Bool = false,
+        progress: ((GcmdSyncProgress) -> Void)? = nil
+    ) throws -> GcmdSyncResult {
         let syncDirectory = try directory ?? syncDirectory() ?? {
             throw GcmdError.syncDirectoryNotConfigured
         }()
@@ -399,13 +466,21 @@ public final class GcmdStore {
             withIntermediateDirectories: true
         )
         if useGit {
-            _ = try runGit(["pull", "--rebase"], in: syncDirectory)
+            progress?(GcmdSyncProgress(phase: .pull, message: "拉取远程命令"))
+            _ = try runGitStreaming(
+                ["pull", "--rebase"],
+                in: syncDirectory,
+                progress: { line in
+                    progress?(GcmdSyncProgress(phase: .pull, message: line))
+                }
+            )
         }
 
         let local = Dictionary(uniqueKeysWithValues: try list(includeDeleted: true).map { ($0.id, $0) })
         let remote = try readRecords(from: syncDirectory)
         let base = try readState(from: syncDirectory)
         let mergedResult = merge(local: local, remote: remote, base: base)
+        progress?(GcmdSyncProgress(phase: .merge, message: "合并 \(mergedResult.records.count) 条命令"))
 
         for command in mergedResult.records.values {
             try upsert(command)
@@ -414,17 +489,155 @@ public final class GcmdStore {
         try writeState(mergedResult.records, to: syncDirectory)
 
         if useGit {
-            _ = try runGit(["add", "commands", ".gcmd-state.json"], in: syncDirectory)
-            let status = try runGit(["status", "--porcelain"], in: syncDirectory)
+            progress?(GcmdSyncProgress(phase: .stage, message: "准备 Git 变更"))
+            _ = try runGitStreaming(
+                ["add", "commands", ".gcmd-state.json"],
+                in: syncDirectory,
+                progress: { line in progress?(GcmdSyncProgress(phase: .stage, message: line)) }
+            )
+            let status = try runGitStreaming(
+                ["status", "--porcelain"],
+                in: syncDirectory,
+                progress: { line in progress?(GcmdSyncProgress(phase: .stage, message: line)) }
+            )
             if !status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                _ = try runGit(["commit", "-m", "Sync gcmd commands"], in: syncDirectory)
-                _ = try runGit(["push"], in: syncDirectory)
+                progress?(GcmdSyncProgress(phase: .commit, message: "创建本地提交"))
+                _ = try runGitStreaming(
+                    ["commit", "-m", "Sync gcmd commands"],
+                    in: syncDirectory,
+                    progress: { line in progress?(GcmdSyncProgress(phase: .commit, message: line)) }
+                )
+            } else {
+                progress?(GcmdSyncProgress(phase: .commit, message: "没有新的本地变更"))
             }
+            progress?(GcmdSyncProgress(phase: .push, message: "推送到远程仓库"))
+            _ = try runGitStreaming(
+                ["push"],
+                in: syncDirectory,
+                progress: { line in
+                    progress?(GcmdSyncProgress(phase: .push, message: line))
+                }
+            )
         }
+        progress?(GcmdSyncProgress(
+            phase: .complete,
+            message: "同步完成：\(mergedResult.records.count) 条命令"
+        ))
         return GcmdSyncResult(
             commandCount: mergedResult.records.count,
             conflictCount: mergedResult.conflicts
         )
+    }
+
+    private func runGitStreaming(
+        _ arguments: [String],
+        in directory: URL,
+        progress: ((String) -> Void)? = nil
+    ) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["-C", directory.path] + arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        process.standardInput = FileHandle.nullDevice
+
+        let stateQueue = DispatchQueue(label: "local.gcmd.git-stream")
+        var outputBuffer = Data()
+        var errorBuffer = Data()
+        var outputFinished = false
+        var errorFinished = false
+        var collectedOutput = Data()
+        var collectedError = Data()
+
+        func append(_ data: Data, isError: Bool) {
+            stateQueue.sync {
+                if isError {
+                    errorBuffer.append(data)
+                    collectedError.append(data)
+                } else {
+                    outputBuffer.append(data)
+                    collectedOutput.append(data)
+                }
+
+                while let newline = (isError ? errorBuffer : outputBuffer).firstIndex(of: 0x0A) {
+                    let source = isError ? errorBuffer : outputBuffer
+                    let lineData = source.subdata(in: source.startIndex..<newline)
+                    if isError {
+                        errorBuffer.removeSubrange(errorBuffer.startIndex...newline)
+                    } else {
+                        outputBuffer.removeSubrange(outputBuffer.startIndex...newline)
+                    }
+                    if let line = String(data: lineData, encoding: .utf8)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines), !line.isEmpty {
+                        progress?(line)
+                    }
+                }
+            }
+        }
+
+        func finish(handle: FileHandle, isError: Bool) {
+            stateQueue.sync {
+                let buffer = isError ? errorBuffer : outputBuffer
+                if let line = String(data: buffer, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines), !line.isEmpty {
+                    progress?(line)
+                }
+                if isError {
+                    errorBuffer.removeAll()
+                } else {
+                    outputBuffer.removeAll()
+                }
+                if isError {
+                    errorFinished = true
+                } else {
+                    outputFinished = true
+                }
+            }
+        }
+
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                finish(handle: handle, isError: false)
+                handle.readabilityHandler = nil
+                return
+            }
+            append(data, isError: false)
+        }
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                finish(handle: handle, isError: true)
+                handle.readabilityHandler = nil
+                return
+            }
+            append(data, isError: true)
+        }
+
+        try process.run()
+        while process.isRunning || !outputFinished || !errorFinished {
+            if Task.isCancelled {
+                process.terminate()
+                Thread.sleep(forTimeInterval: 0.05)
+                if process.isRunning {
+                    process.interrupt()
+                }
+                throw CancellationError()
+            }
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+        process.waitUntilExit()
+
+        let stdout = String(data: collectedOutput, encoding: .utf8) ?? ""
+        guard process.terminationStatus == 0 else {
+            let stderr = String(data: collectedError, encoding: .utf8) ?? ""
+            let message = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GcmdError.message(message.isEmpty ? "git \(arguments.first ?? "") failed" : message)
+        }
+        return stdout
     }
 
     public static func title(for command: String) -> String {
