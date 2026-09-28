@@ -54,6 +54,16 @@ git clone \
 这个包是 universal binary（通用二进制），同时支持 Apple Silicon 和 Intel Mac，
 第二台电脑不需要运行 SwiftPM（Swift 包管理器）。
 
+如果已经确认第二台 Mac 的 architecture（架构），也可以只复制更小的单架构包：
+
+```bash
+# Apple Silicon Mac
+./mac-app/build-app.sh --arch arm64
+
+# Intel Mac
+./mac-app/build-app.sh --arch x86_64
+```
+
 解压后保持 `gcmd.app`、`gcmd`、`gcmd.zsh` 在同一个 folder（目录）：
 
 ```bash
@@ -66,7 +76,7 @@ source "$HOME/Tools/gcmd-macos-universal/gcmd.zsh"
 
 ```bash
 cd ~/Desktop/gcmd-command-library
-./mac-app/build-app.sh
+./mac-app/build-app.sh --arch universal
 ```
 
 构建产物同样在 `build/gcmd-macos-universal.zip`。项目需要 Swift 和
