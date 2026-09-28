@@ -57,6 +57,40 @@ cd ~/Desktop/gcmd-command-library
 
 项目需要 Swift 和 macOS 13 或更高版本。
 
+如果出现 `Invalid manifest`、`PackageDescription` 或
+`Undefined symbols for architecture x86_64`，通常是 Xcode/Command Line Tools
+的 active toolchain（当前工具链）不匹配。先检查：
+
+```bash
+xcode-select --print-path
+xcrun --find swift
+xcrun swift --version
+```
+
+如果这台 Mac 安装了 Xcode，优先切换到 Xcode：
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+```
+
+如果没有安装完整 Xcode，安装或更新 Command Line Tools：
+
+```bash
+xcode-select --install
+```
+
+然后清理 SwiftPM build cache（构建缓存）并重新构建：
+
+```bash
+cd ~/Desktop/gcmd-command-library/mac-app
+swift package reset
+cd ..
+./mac-app/build-app.sh
+```
+
+如果 Xcode 安装在其他路径，把上面的路径替换成实际的
+`Xcode.app/Contents/Developer` 路径。
+
 ## 5. 启用 zsh 快捷键
 
 ```bash
