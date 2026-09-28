@@ -46,6 +46,14 @@ final class AppModel: ObservableObject {
         (try? store.search(query)) ?? []
     }
 
+    var availableTags: [GcmdTagSummary] {
+        Dictionary(grouping: commands.flatMap(\.tags), by: { $0 })
+            .map { GcmdTagSummary(name: $0.key, count: $0.value.count) }
+            .sorted {
+                $0.count == $1.count ? $0.name.lowercased() < $1.name.lowercased() : $0.count > $1.count
+            }
+    }
+
     var dataDirectoryURL: URL {
         store.dataDirectory
     }
@@ -603,6 +611,24 @@ struct SearchView: View {
             )
             .padding(12)
 
+            if !model.availableTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(model.availableTags) { tag in
+                            TagChipView(
+                                tag: tag,
+                                selected: model.query == tag.name
+                            ) {
+                                model.query = model.query == tag.name ? "" : tag.name
+                                model.selectedID = nil
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+            }
+
             HStack(spacing: 8) {
                 Text("COMMANDS")
                     .paletteLabel()
@@ -781,6 +807,7 @@ struct CommandRow: View {
 struct EditorView: View {
     @ObservedObject var model: AppModel
     let close: () -> Void
+    @FocusState private var commandFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -805,6 +832,7 @@ struct EditorView: View {
                         TextEditor(text: $model.draft.command)
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundStyle(Palette.text)
+                            .focused($commandFocused)
                             .scrollContentBackground(.hidden)
                             .padding(10)
                             .frame(minHeight: 142)
@@ -872,6 +900,61 @@ struct EditorView: View {
             .padding(.vertical, 13)
             .background(Palette.footer)
         }
+        .onAppear {
+            if model.draft.id == nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    commandFocused = true
+                }
+            }
+        }
+    }
+}
+
+struct GcmdTagSummary: Identifiable {
+    let name: String
+    let count: Int
+
+    var id: String { name }
+}
+
+struct TagChipView: View {
+    let tag: GcmdTagSummary
+    let selected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text("#\(tag.name)")
+                    .font(.system(size: 11, design: .monospaced))
+                Text("\(tag.count)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(selected ? Palette.panel : Palette.muted)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(chipColor, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered in
+            isHovered = hovered
+        }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var chipColor: Color {
+        if selected { return Palette.accent }
+        return isHovered ? Palette.buttonHovered : Palette.iconBackground
+    }
+
+    private var borderColor: Color {
+        if selected { return Palette.accent.opacity(0.8) }
+        return isHovered ? Palette.borderStrong : Palette.border
     }
 }
 
