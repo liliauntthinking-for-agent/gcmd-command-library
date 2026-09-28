@@ -126,32 +126,80 @@ func isQuarantined(_ url: URL) -> Bool {
     return process.terminationStatus == 0
 }
 
+func shellIntegrationCandidatesFromShellConfig() -> [URL] {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let shellFiles = [
+        home.appendingPathComponent(".zshrc"),
+        home.appendingPathComponent(".zprofile"),
+        home.appendingPathComponent(".zlogin")
+    ]
+    var candidates: [URL] = []
+
+    for shellFile in shellFiles {
+        guard let content = try? String(contentsOf: shellFile, encoding: .utf8) else {
+            continue
+        }
+        for rawLine in content.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.contains("gcmd.zsh") else { continue }
+            var token = line
+                .replacingOccurrences(of: "source ", with: " ")
+                .replacingOccurrences(of: ". ", with: " ")
+                .split(whereSeparator: { $0 == " " || $0 == "\t" })
+                .first
+                .map(String.init) ?? ""
+            token = token
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                .trimmingCharacters(in: .whitespaces)
+            guard !token.isEmpty else { continue }
+
+            let candidate: URL
+            if token.hasPrefix("~") {
+                candidate = home.appendingPathComponent(String(token.dropFirst(2)))
+            } else if token.hasPrefix("/") {
+                candidate = URL(fileURLWithPath: token)
+            } else {
+                candidate = home.appendingPathComponent(token)
+            }
+            if !candidates.contains(candidate) {
+                candidates.append(candidate)
+            }
+        }
+    }
+    return candidates
+}
+
+func executablePath() -> URL {
+    URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+}
+
 func shellIntegrationCandidate() -> URL? {
+    var candidates = shellIntegrationCandidatesFromShellConfig()
     var directories: [URL] = []
-    var executableDirectory = URL(fileURLWithPath: CommandLine.arguments[0])
-        .resolvingSymlinksInPath()
-        .deletingLastPathComponent()
-    while executableDirectory.path != "/" {
-        directories.append(executableDirectory)
-        executableDirectory = executableDirectory.deletingLastPathComponent()
+    var directory = executablePath().deletingLastPathComponent()
+    while directory.path != "/" {
+        directories.append(directory)
+        directory = directory.deletingLastPathComponent()
     }
 
-    var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     while directory.path != "/" {
         directories.append(directory)
         directory = directory.deletingLastPathComponent()
     }
 
     for directory in directories {
-        let candidates = [
+        let localCandidates = [
             directory.appendingPathComponent("gcmd.zsh"),
             directory.appendingPathComponent("gcmd/shell/gcmd.zsh")
         ]
-        if let candidate = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
-            return candidate
-        }
+        candidates.append(contentsOf: localCandidates)
     }
-    return nil
+
+    if let candidate = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+        return candidate
+    }
+    return candidates.first
 }
 
 func shellIntegrationIsConfigured(_ candidate: URL) -> Bool {
@@ -188,8 +236,12 @@ do {
         let remoteURL = store.remoteRepositoryURL()
         let app = appURL()
         let integration = shellIntegrationCandidate()
+        let executable = executablePath()
+        let configuredAppPath = ProcessInfo.processInfo.environment["GCMD_APP"]
 
         print("data directory: \(store.dataDirectory.path)")
+        print("executable path: \(executable.path)")
+        print("GCMD_APP: \(configuredAppPath ?? "not set")")
         print("active commands: \(activeCount)")
         print("total records: \(totalCount)")
         print("sync directory: \(syncDirectory?.path ?? "not configured")")
@@ -215,6 +267,9 @@ do {
         print("app quarantined: \(appExists && isQuarantined(app))")
 
         print("zsh integration file: \(integration?.path ?? "not found")")
+        if let integration, !FileManager.default.fileExists(atPath: integration.path) {
+            print("zsh integration configured at: missing path")
+        }
         if let integration {
             print("zshrc configures integration: \(shellIntegrationIsConfigured(integration))")
         }
