@@ -329,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popup.contentView = hosting
         popup.center()
         panel = popup
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate(ignoringOtherApps: false)
         popup.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async {
             popup.makeKey()
@@ -969,13 +969,13 @@ private extension View {
 }
 
 @main
-struct GcmdApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-
-    var body: some Scene {
-        Settings {
-            EmptyView()
-        }
+@MainActor
+struct GcmdApp {
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+        application.run()
     }
 }
 
