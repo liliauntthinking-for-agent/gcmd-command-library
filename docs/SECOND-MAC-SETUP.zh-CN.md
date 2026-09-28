@@ -153,6 +153,18 @@ cd ~/Desktop/gcmd-command-library
 synced 63 commands
 ```
 
+如果搜索结果是空的，先执行 `gcmd sync --git`。`sync init` 只配置同步目录，
+不会自动下载数据。
+
+遇到异常时执行：
+
+```bash
+gcmd doctor
+```
+
+它会显示本地命令数量、同步目录、remote URL（远程地址）、app path（应用路径）、
+quarantine（隔离标记）和 zsh integration（zsh 集成）状态。
+
 以后日常同步：
 
 ```bash

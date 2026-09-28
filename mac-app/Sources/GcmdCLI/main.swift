@@ -18,6 +18,7 @@ func printUsage() {
           gcmd sync init DIRECTORY [--git]
           gcmd sync [--directory DIRECTORY] [--git]
           gcmd path
+          gcmd doctor
           gcmd launch search
           gcmd launch save [--command COMMAND] [--cwd DIR]
           gcmd launch sync
@@ -109,6 +110,64 @@ func launchApp(_ args: [String]) -> Never {
     }
 }
 
+func isQuarantined(_ url: URL) -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+    process.arguments = ["-p", "com.apple.quarantine", url.path]
+    process.standardError = FileHandle.nullDevice
+    process.standardInput = FileHandle.nullDevice
+    let output = Pipe()
+    process.standardOutput = output
+    do {
+        try process.run()
+    } catch {
+        return false
+    }
+    _ = output.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    return process.terminationStatus == 0
+}
+
+func shellIntegrationCandidate() -> URL? {
+    var directories = [
+        URL(fileURLWithPath: CommandLine.arguments[0])
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()
+    ]
+    var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    while directory.path != "/" {
+        directories.append(directory)
+        directory = directory.deletingLastPathComponent()
+    }
+
+    for directory in directories {
+        let candidates = [
+            directory.appendingPathComponent("gcmd.zsh"),
+            directory.appendingPathComponent("gcmd/shell/gcmd.zsh")
+        ]
+        if let candidate = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            return candidate
+        }
+    }
+    return nil
+}
+
+func shellIntegrationIsConfigured(_ candidate: URL) -> Bool {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let shellFiles = [
+        home.appendingPathComponent(".zshrc"),
+        home.appendingPathComponent(".zprofile"),
+        home.appendingPathComponent(".zlogin")
+    ]
+    let expectedTexts = [candidate.path, "gcmd.zsh"]
+    return shellFiles.contains { shellFile in
+        guard let content = try? String(contentsOf: shellFile, encoding: .utf8) else {
+            return false
+        }
+        return expectedTexts.contains { content.contains($0) }
+    }
+}
+
 guard let subcommand = arguments.first else {
     printUsage()
     exit(2)
@@ -119,6 +178,57 @@ do {
     switch subcommand {
     case "path":
         print(store.dataDirectory.path)
+
+    case "doctor":
+        let activeCount = (try? store.list())?.count ?? 0
+        let totalCount = (try? store.list(includeDeleted: true))?.count ?? 0
+        let syncDirectory = try? store.syncDirectory()
+        let remoteURL = store.remoteRepositoryURL()
+        let app = appURL()
+        let integration = shellIntegrationCandidate()
+
+        print("data directory: \(store.dataDirectory.path)")
+        print("active commands: \(activeCount)")
+        print("total records: \(totalCount)")
+        print("sync directory: \(syncDirectory?.path ?? "not configured")")
+
+        if let syncDirectory {
+            let exists = FileManager.default.fileExists(atPath: syncDirectory.path)
+            let isGitRepository = FileManager.default.fileExists(
+                atPath: syncDirectory.appendingPathComponent(".git").path
+            )
+            let commandFiles = (try? FileManager.default.contentsOfDirectory(
+                at: syncDirectory.appendingPathComponent("commands"),
+                includingPropertiesForKeys: nil
+            ))?.filter { $0.pathExtension == "json" }.count ?? 0
+            print("sync directory exists: \(exists)")
+            print("git repository: \(isGitRepository)")
+            print("remote JSON files: \(commandFiles)")
+        }
+        print("remote URL: \(remoteURL ?? "not configured")")
+
+        print("app path: \(app.path)")
+        let appExists = FileManager.default.fileExists(atPath: app.path)
+        print("app exists: \(appExists)")
+        print("app quarantined: \(appExists && isQuarantined(app))")
+
+        print("zsh integration file: \(integration?.path ?? "not found")")
+        if let integration {
+            print("zshrc configures integration: \(shellIntegrationIsConfigured(integration))")
+        }
+
+        if activeCount == 0 {
+            print("next step: run `gcmd sync --git` to download commands")
+        }
+        if !appExists {
+            print("next step: put gcmd.app beside gcmd, or set GCMD_APP")
+        }
+        if appExists && isQuarantined(app) {
+            print("next step: remove the quarantine flag or open the app once from Finder")
+        }
+        if integration != nil && !shellIntegrationIsConfigured(integration!) {
+            print("next step: source gcmd.zsh from ~/.zshrc")
+        }
 
     case "save":
         let args = Array(arguments.dropFirst())
@@ -161,6 +271,9 @@ do {
                 print("  \(command.command)")
             }
             if records.isEmpty { print("No commands found.") }
+            if records.isEmpty && !args.contains("--all") {
+                print("Run `gcmd sync --git` if this is a newly configured Mac.")
+            }
         }
 
     case "pick":
@@ -168,6 +281,7 @@ do {
         let records = try store.search(option("--query", in: args) ?? "")
         guard !records.isEmpty else {
             printError("No commands found.")
+            printError("Run `gcmd sync --git` if this is a newly configured Mac.")
             exit(1)
         }
         for (index, command) in records.enumerated() {

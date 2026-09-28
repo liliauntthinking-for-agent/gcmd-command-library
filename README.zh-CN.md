@@ -96,6 +96,7 @@ gcmd update COMMAND_ID --title "新标题" --command "新命令"
 gcmd delete COMMAND_ID
 gcmd import-warp
 gcmd path
+gcmd doctor
 ```
 
 `gcmd import-warp` 会清空本地命令数据库，并从当前 Warp 的 SQLite 数据库导入
@@ -118,6 +119,10 @@ kubectl -n {{namespace}} get pods
 ```
 
 测试时可以设置 `GCMD_HOME` 使用独立的数据目录。
+
+`gcmd doctor` 会显示本地命令数量、sync directory（同步目录）、Git remote
+（远程地址）、app path（应用路径）、quarantine（隔离标记）和 zsh integration
+（zsh 集成）状态。如果另一台 Mac 上快捷键或同步异常，先执行这个命令。
 
 ## Git 远程同步
 

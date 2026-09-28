@@ -8,9 +8,16 @@
 #   Ctrl-X  Open the save editor with the current input
 
 if (( $+commands[gcmd] )); then
+  function _gcmd_launch() {
+    local output
+    if ! output="$(gcmd launch "$@" 2>&1)"; then
+      zle -M "gcmd: $output"
+    fi
+  }
+
   function _gcmd_search_widget() {
     zle -I
-    gcmd launch search
+    _gcmd_launch search
     zle reset-prompt
   }
 
@@ -20,7 +27,7 @@ if (( $+commands[gcmd] )); then
       return
     fi
     zle -I
-    gcmd launch save \
+    _gcmd_launch save \
       --command "$BUFFER" \
       --cwd "$PWD"
     zle reset-prompt

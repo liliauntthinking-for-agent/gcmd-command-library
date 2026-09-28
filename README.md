@@ -93,6 +93,7 @@ gcmd update COMMAND_ID --title "New title" --command "new command"
 gcmd delete COMMAND_ID
 gcmd import-warp
 gcmd path
+gcmd doctor
 ```
 
 `gcmd import-warp` clears the local command database and imports workflows
@@ -117,6 +118,10 @@ Data is stored in:
 ```
 
 Set `GCMD_HOME` to use another data directory, which is useful for tests.
+
+`gcmd doctor` reports the database count, sync-directory state, Git remote,
+app path, quarantine flag, and zsh integration. Use it when shortcuts or sync
+do not work on another Mac.
 
 ## Git synchronization
 
