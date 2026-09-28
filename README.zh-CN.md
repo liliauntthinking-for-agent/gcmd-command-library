@@ -83,6 +83,11 @@ source ~/.zshrc
 
 ## CLI 用法
 
+详细的 command options（命令选项）、variables（变量）、sync（同步）行为和
+troubleshooting（排错）说明见：
+
+[CLI 使用手册](docs/CLI.zh-CN.md)
+
 ```bash
 gcmd save --title "Git 状态" --tags git,daily "git status -sb"
 gcmd list

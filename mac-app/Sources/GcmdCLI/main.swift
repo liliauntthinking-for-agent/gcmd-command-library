@@ -10,8 +10,9 @@ func printUsage() {
 
         Usage:
           gcmd save [--title TITLE] [--tags TAGS] [--cwd DIR] COMMAND
-          gcmd list [QUERY]
-          gcmd pick
+          gcmd save --stdin [--title TITLE] [--tags TAGS] [--cwd DIR]
+          gcmd list [QUERY] [--json] [--all]
+          gcmd pick [--query QUERY]
           gcmd update ID [--title TITLE] [--command COMMAND] [--tags TAGS]
           gcmd delete ID
           gcmd import-warp [WARP_DATABASE]

@@ -89,6 +89,10 @@ source ~/.zshrc
 
 ## CLI
 
+For the detailed command reference, option behavior, variables, sync rules,
+and troubleshooting examples, see the
+[Chinese CLI guide](docs/CLI.zh-CN.md).
+
 ```bash
 gcmd save --title "Git status" --tags git,daily "git status -sb"
 gcmd list

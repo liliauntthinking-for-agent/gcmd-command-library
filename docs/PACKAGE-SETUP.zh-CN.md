@@ -128,6 +128,8 @@ gcmd list
 gcmd sync --git
 ```
 
+完整的 CLI usage（命令行用法）见 [CLI.zh-CN.md](CLI.zh-CN.md)。
+
 如果 Git network access（Git 网络访问）暂时不可用，但 data repository 已经
 clone 到本地，可以先导入已下载的 JSON files（JSON 文件）：
 
