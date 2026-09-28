@@ -39,6 +39,10 @@ final class AppModel: ObservableObject {
         (try? store.search(query)) ?? []
     }
 
+    var dataDirectoryURL: URL {
+        store.dataDirectory
+    }
+
     func configure(arguments: [String]) {
         if arguments.contains("--save") {
             mode = .editor
@@ -192,6 +196,15 @@ final class AppModel: ObservableObject {
         refresh()
     }
 
+    func sync() {
+        do {
+            let result = try store.sync(useGit: true)
+            showNotice(result.summary)
+        } catch {
+            showNotice(error.localizedDescription)
+        }
+    }
+
     private func insertCommandText(_ commandText: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(commandText, forType: .string)
@@ -225,9 +238,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var panel: GcmdPanel?
     private var keyMonitor: Any?
+    private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        setupStatusItem()
         let arguments = Array(CommandLine.arguments.dropFirst())
         model.onFinish = { NSApp.terminate(nil) }
         model.configure(arguments: arguments)
@@ -236,7 +251,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func setupStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.image = NSImage(
+            systemSymbolName: "terminal",
+            accessibilityDescription: "gcmd"
+        )
+        item.button?.image?.isTemplate = true
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "搜索命令", action: #selector(menuSearch), keyEquivalent: "")
+        menu.addItem(withTitle: "新建命令", action: #selector(menuNewCommand), keyEquivalent: "")
+        menu.addItem(withTitle: "同步命令", action: #selector(menuSync), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "打开数据目录", action: #selector(menuOpenDataDirectory), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "退出 gcmd", action: #selector(menuQuit), keyEquivalent: "")
+        for item in menu.items {
+            item.target = self
+        }
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func menuSearch() {
+        model.configure(arguments: ["--search"])
+        showPopup(mode: .search)
+    }
+
+    @objc private func menuNewCommand() {
+        model.openNewCommand()
+        showPopup(mode: .editor)
+    }
+
+    @objc private func menuSync() {
+        model.sync()
+        closeAndExit()
+    }
+
+    @objc private func menuOpenDataDirectory() {
+        NSWorkspace.shared.open(model.dataDirectoryURL)
+        closeAndExit()
+    }
+
+    @objc private func menuQuit() {
+        closeAndExit()
+    }
+
     private func showPopup(mode: PopupMode) {
+        closePopup()
         model.mode = mode
         if mode == .search {
             model.query = ""
@@ -275,9 +338,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installKeyMonitor()
     }
 
-    private func closeAndExit() {
+    private func closePopup() {
         removeKeyMonitor()
         panel?.orderOut(nil)
+        panel = nil
+    }
+
+    private func closeAndExit() {
+        closePopup()
         NSApp.terminate(nil)
     }
 

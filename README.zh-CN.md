@@ -49,6 +49,10 @@ app 是按需启动的 one-shot app（一次性应用）：完成一次操作后
 - `Ctrl-G`：打开命令搜索。
 - `Ctrl-X`：打开保存命令编辑器。
 
+app 运行期间，macOS 菜单栏会暂时显示一个 terminal 图标。popup（弹窗）关闭
+后 app 自动退出，图标也会消失。点击图标可以进入搜索、新建命令、同步、打开
+数据目录和退出等功能。
+
 app 和 `gcmd` launcher（启动器）共用同一个 Swift core（核心层）以及 SQLite 数据库。
 选中命令后，app 会先复制到剪贴板，并尝试通过 AppleScript 插入当前聚焦的
 Ghostty terminal。如果 macOS 尚未允许自动化控制 Ghostty，可以手动按 `Cmd-V`
