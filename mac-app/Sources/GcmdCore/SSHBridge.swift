@@ -281,6 +281,8 @@ public enum GcmdSSHBridge {
         """
         GCMD_BRIDGE_URL="\(baseURL)"
         export GCMD_BRIDGE_URL
+        case "$TERM" in ""|dumb|unknown) export TERM=xterm-256color ;; esac
+        stty echoe echok echoke 2>/dev/null
 
         function _gcmd_bridge_message() {
           if [ -n "$ZSH_VERSION" ]; then
