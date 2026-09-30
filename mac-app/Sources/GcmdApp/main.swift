@@ -118,6 +118,16 @@ final class AppModel: ObservableObject {
         variableRows = command.variables
     }
 
+    func toggleDraftTag(_ name: String) {
+        var tags = GcmdStore.tags(from: draft.tags)
+        if let index = tags.firstIndex(of: name) {
+            tags.remove(at: index)
+        } else {
+            tags.append(name)
+        }
+        draft.tags = tags.joined(separator: ", ")
+    }
+
     func saveDraft() {
         do {
             draft.description = descriptionText
@@ -868,7 +878,26 @@ struct EditorView: View {
                     )
 
                     PaletteField(label: "TITLE", placeholder: "给这条命令一个容易搜索的名字", text: $model.draft.title)
-                    PaletteField(label: "TAGS", placeholder: "git, daily", text: $model.draft.tags)
+                    VStack(alignment: .leading, spacing: 8) {
+                        PaletteField(label: "TAGS", placeholder: "git, daily", text: $model.draft.tags)
+                        if !model.availableTags.isEmpty {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 120), spacing: 6)],
+                                alignment: .leading,
+                                spacing: 6
+                            ) {
+                                ForEach(model.availableTags) { tag in
+                                    TagChipView(
+                                        tag: tag,
+                                        selected: GcmdStore.tags(from: model.draft.tags).contains(tag.name)
+                                    ) {
+                                        model.toggleDraftTag(tag.name)
+                                    }
+                                    .help(tag.name)
+                                }
+                            }
+                        }
+                    }
 
                     HStack {
                         Text("VARIABLES")
