@@ -260,6 +260,7 @@ public enum GcmdSSHBridge {
         printf '%s' '\(encoded)' | base64 -d > "$GCMD_BRIDGE_FILE"; \
         chmod 700 "$GCMD_BRIDGE_FILE"; \
         GCMD_HOOK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gcmd-hook-XXXXXXXXXX")"; \
+        if ! infocmp "${TERM:-dumb}" >/dev/null 2>&1; then TERM=xterm-256color; export TERM; fi; \
         case "$(basename "${SHELL:-/bin/sh}")" in \
           *zsh*) \
             printf '. "%s"; rm -f "%s"; rm -rf "%s"\\n[ -f "${HOME}/.zshrc" ] && . "${HOME}/.zshrc"\\n' \
@@ -281,8 +282,6 @@ public enum GcmdSSHBridge {
         """
         GCMD_BRIDGE_URL="\(baseURL)"
         export GCMD_BRIDGE_URL
-        case "$TERM" in ""|dumb|unknown) export TERM=xterm-256color ;; esac
-        stty echoe echok echoke 2>/dev/null
 
         function _gcmd_bridge_message() {
           if [ -n "$ZSH_VERSION" ]; then

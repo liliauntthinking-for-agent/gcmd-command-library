@@ -164,8 +164,11 @@ final class GcmdCoreTests: XCTestCase {
         )
 
         XCTAssertTrue(command.contains("mktemp"))
+        XCTAssertTrue(command.contains("infocmp \"${TERM:-dumb}\""))
+        XCTAssertTrue(command.contains("TERM=xterm-256color; export TERM"))
         XCTAssertTrue(script.contains("http://127.0.0.1:23456/bridge-token"))
         XCTAssertTrue(script.contains("gcmd-remote-search"))
+        XCTAssertFalse(script.contains("stty "))
     }
 }
 
