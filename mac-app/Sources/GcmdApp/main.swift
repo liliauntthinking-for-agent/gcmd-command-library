@@ -640,21 +640,12 @@ struct SearchView: View {
             .padding(12)
 
             if !model.availableTags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(model.availableTags) { tag in
-                            TagChipView(
-                                tag: tag,
-                                selected: model.query == tag.name
-                            ) {
-                                model.query = model.query == tag.name ? "" : tag.name
-                                model.selectedID = nil
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                TagStrip(tags: model.availableTags, selected: { model.query == $0.name }) { tag in
+                    model.query = model.query == tag.name ? "" : tag.name
+                    model.selectedID = nil
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
 
             HStack(spacing: 8) {
@@ -881,20 +872,11 @@ struct EditorView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         PaletteField(label: "TAGS", placeholder: "git, daily", text: $model.draft.tags)
                         if !model.availableTags.isEmpty {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 120), spacing: 6)],
-                                alignment: .leading,
-                                spacing: 6
-                            ) {
-                                ForEach(model.availableTags) { tag in
-                                    TagChipView(
-                                        tag: tag,
-                                        selected: GcmdStore.tags(from: model.draft.tags).contains(tag.name)
-                                    ) {
-                                        model.toggleDraftTag(tag.name)
-                                    }
-                                    .help(tag.name)
-                                }
+                            TagStrip(
+                                tags: model.availableTags,
+                                selected: { GcmdStore.tags(from: model.draft.tags).contains($0.name) }
+                            ) { tag in
+                                model.toggleDraftTag(tag.name)
                             }
                         }
                     }
@@ -962,6 +944,25 @@ struct GcmdTagSummary: Identifiable {
     let count: Int
 
     var id: String { name }
+}
+
+struct TagStrip: View {
+    let tags: [GcmdTagSummary]
+    let selected: (GcmdTagSummary) -> Bool
+    let onSelect: (GcmdTagSummary) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(tags) { tag in
+                    TagChipView(tag: tag, selected: selected(tag)) {
+                        onSelect(tag)
+                    }
+                    .help(tag.name)
+                }
+            }
+        }
+    }
 }
 
 struct TagChipView: View {
