@@ -255,31 +255,41 @@ func runSSHBridge(_ arguments: ArraySlice<String>) -> Never {
     print("Remote shortcuts: Ctrl-G search, Ctrl-X save.")
     fflush(stdout)
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-    process.standardInput = FileHandle.standardInput
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
-    process.arguments = [
-        "-t",
-        "-o", "ExitOnForwardFailure=yes",
-        "-R", "127.0.0.1:\(remotePort):127.0.0.1:\(bridge.localPort)"
-    ] + sshArguments + [remoteCommand]
+    // fork: parent keeps bridge alive; child execs ssh inheriting the TTY.
+    let forkFn = dlsym(dlopen(nil, RTLD_LAZY), "fork")!
+    typealias ForkFn = @convention(c) () -> Int32
+    let realFork = unsafeBitCast(forkFn, to: ForkFn.self)
+    let pid = realFork()
 
-    signal(SIGINT) { _ in exit(130) }
-    signal(SIGTERM) { _ in exit(143) }
-
-    do {
-        try process.run()
-        process.waitUntilExit()
-    } catch {
+    if pid == 0 {
+        // Child
+        var cArgs: [String] = ["ssh", "-t", "-o", "ExitOnForwardFailure=yes",
+                               "-R", "127.0.0.1:\(remotePort):127.0.0.1:\(bridge.localPort)"]
+        cArgs.append(contentsOf: sshArguments)
+        cArgs.append(remoteCommand)
+        var argv: [UnsafeMutablePointer<CChar>?] = cArgs.map { strdup($0) }
+        argv.append(nil)
+        execv("/usr/bin/ssh", &argv)
+        exit(127)
+    } else if pid > 0 {
+        // Parent: wait for SSH to exit, then stop bridge
+        signal(SIGINT, SIG_IGN)
+        signal(SIGTERM, SIG_IGN)
+        var status: Int32 = 0
+        waitpid(pid, &status, 0)
         bridge.stop()
-        printError("gcmd: \(error.localizedDescription)")
+        signal(SIGINT, SIG_DFL)
+        signal(SIGTERM, SIG_DFL)
+        if (status & 0x7F) == 0 {
+            exit((status >> 8) & 0xFF)
+        }
+        exit(1)
+    } else {
+        bridge.stop()
+        printError("gcmd: fork failed")
         exit(1)
     }
 
-    bridge.stop()
-    exit(process.terminationStatus)
 }
 
 func executablePath() -> URL {
