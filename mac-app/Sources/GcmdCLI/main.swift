@@ -252,6 +252,9 @@ func runSSHBridge(_ arguments: ArraySlice<String>) -> Never {
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+    process.standardInput = FileHandle.standardInput
+    process.standardOutput = FileHandle.standardOutput
+    process.standardError = FileHandle.standardError
     process.arguments = [
         "-t",
         "-o", "ExitOnForwardFailure=yes",
