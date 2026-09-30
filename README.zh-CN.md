@@ -83,15 +83,24 @@ source ~/.zshrc
 
 ## SSH 会话
 
-直接运行 `ssh user@server` 后，`Ctrl-G` 不会生效，因为前台已经是远端
-shell，本地 zsh widget 不再处理按键。
+gcmd 会自动包装交互式 `ssh` 调用。直接运行 `ssh user@server` 即可，
+远端 shell 里的 `Ctrl-G` 和 `Ctrl-X` 会正常工作。
 
-需要通过 SSH 使用 gcmd 时，改用：
+也可以显式使用：
 
 ```bash
 gcmd ssh user@server
 gcmd ssh -p 2222 user@server
 gcmd ssh --remote-port 23456 user@server
+```
+
+wrapper 只包装交互式登录。如果命令中包含远端命令（例如
+`ssh host uptime`），则直接使用原始 `ssh`，不会建立 bridge。
+
+如果某次不需要 bridge，可以跳过：
+
+```bash
+GCMD_NO_BRIDGE=1 ssh user@server
 ```
 
 这个 wrapper 只在 SSH 进程存活期间建立 loopback reverse tunnel。远端 zsh

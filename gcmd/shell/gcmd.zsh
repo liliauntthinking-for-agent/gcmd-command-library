@@ -69,3 +69,9 @@ if [[ -n "$_GCMD_CLI" ]]; then
     bindkey -M "$keymap" $'\x18' gcmd-save
   done
 fi
+
+# Transparent SSH bridge: wraps interactive `ssh` so Ctrl-G / Ctrl-X work remotely.
+# Set GCMD_NO_BRIDGE=1 to bypass for a single call.
+if [[ "${GCMD_NO_BRIDGE:-0}" != "1" && -x "${_GCMD_CLI}" ]]; then
+  source "$(dirname "${(%):-%x}")/gcmd-ssh.zsh"
+fi

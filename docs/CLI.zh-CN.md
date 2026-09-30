@@ -469,16 +469,24 @@ Esc       返回或退出
 
 ## ssh：在远端 shell 使用快捷键
 
-普通 `ssh user@server` 进入远端后，本地 zsh 不再接收 `Ctrl-G`。这是终端
-进程模型的正常行为，不是 Ghostty 或 gcmd 失效。
+gcmd 会自动包装交互式 `ssh`。直接运行 `ssh user@server`，远端
+`Ctrl-G` 和 `Ctrl-X` 即可正常使用，不需要额外操作。
 
-改用 gcmd 的 SSH wrapper：
+也可以显式使用 gcmd 版本：
 
 ```bash
 gcmd ssh user@example.com
 gcmd ssh -p 2222 deploy@example.com
 gcmd ssh --remote-port 23456 user@example.com
 gcmd ssh --local-port 34567 user@example.com
+```
+
+wrapper 的判断逻辑：
+
+```text
+- 交互式登录（没有远端命令）→ 走 gcmd bridge
+- 包含远端命令（例如 ssh host uptime）→ 直接用原始 ssh
+- GCMD_NO_BRIDGE=1 → 始终直接用原始 ssh
 ```
 
 `--remote-port` 是远端 loopback listener（回环监听端口），默认随机选择。

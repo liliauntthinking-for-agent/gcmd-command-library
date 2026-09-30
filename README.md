@@ -89,15 +89,24 @@ source ~/.zshrc
 
 ## SSH sessions
 
-After running plain `ssh user@server`, `Ctrl-G` belongs to the remote shell, so
-the local zsh widget no longer receives it.
+gcmd automatically wraps interactive `ssh` calls. Running plain
+`ssh user@server` enables `Ctrl-G` and `Ctrl-X` in the remote shell.
 
-Use the SSH wrapper when you need gcmd on a remote machine:
+You can also use the explicit form:
 
 ```bash
 gcmd ssh user@server
 gcmd ssh -p 2222 user@server
 gcmd ssh --remote-port 23456 user@server
+```
+
+The wrapper only activates for interactive logins. If the command includes a
+remote command (for example `ssh host uptime`), plain `ssh` runs instead.
+
+To skip the bridge for a single call:
+
+```bash
+GCMD_NO_BRIDGE=1 ssh user@server
 ```
 
 The wrapper keeps a loopback reverse tunnel alive only while SSH is running.

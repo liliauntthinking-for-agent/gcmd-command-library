@@ -330,6 +330,10 @@ guard let subcommand = arguments.first else {
     exit(2)
 }
 
+if subcommand == "ssh" {
+    runSSHBridge(arguments.dropFirst())
+}
+
 do {
     let store = try GcmdStore()
     switch subcommand {
