@@ -339,7 +339,9 @@ public enum GcmdSSHBridge {
           done
         else
           bind -x '"\\C-g": _gcmd_bridge_search'
-          bind -x '"\\C-x": _gcmd_bridge_save'
+          # Ctrl-X is a Readline prefix key; a macro avoids binding a shell command to that keymap.
+          bind '"\\C-x": "\\C-^"'
+          bind -x '"\\C-^": _gcmd_bridge_save'
         fi
         """
     }

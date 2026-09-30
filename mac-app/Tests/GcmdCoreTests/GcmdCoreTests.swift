@@ -153,6 +153,27 @@ final class GcmdCoreTests: XCTestCase {
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 404)
     }
 
+    func testSSHBridgeDispatchesSave() throws {
+        let bridge = try GcmdSSHBridgeServer(localPort: 0)
+        let launched = DispatchSemaphore(value: 0)
+        var receivedArguments: [String] = []
+        bridge.launchApp = { arguments in
+            receivedArguments = arguments
+            launched.signal()
+        }
+        try bridge.start()
+        defer { bridge.stop() }
+
+        var request = URLRequest(url: URL(string: "\(bridge.baseURL)/save")!)
+        request.httpMethod = "POST"
+        request.httpBody = Data("command=echo+hello&cwd=%2Ftmp%2Fremote".utf8)
+        let (_, response) = try URLSession.shared.synchronousData(for: request)
+
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(launched.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(receivedArguments, ["--save", "--command", "echo hello", "--cwd", "/tmp/remote"])
+    }
+
     func testRemoteCommandEmbedsPortsAndToken() {
         let script = GcmdSSHBridge.remoteScript(
             baseURL: "http://127.0.0.1:23456/bridge-token"
@@ -168,6 +189,8 @@ final class GcmdCoreTests: XCTestCase {
         XCTAssertTrue(command.contains("TERM=xterm-256color; export TERM"))
         XCTAssertTrue(script.contains("http://127.0.0.1:23456/bridge-token"))
         XCTAssertTrue(script.contains("gcmd-remote-search"))
+        XCTAssertTrue(script.contains("bind '\"\\C-x\": \"\\C-^\"'"))
+        XCTAssertTrue(script.contains("bind -x '\"\\C-^\": _gcmd_bridge_save'"))
         XCTAssertFalse(script.contains("stty "))
     }
 }
