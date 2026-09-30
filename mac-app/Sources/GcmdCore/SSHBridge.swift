@@ -257,12 +257,22 @@ public enum GcmdSSHBridge {
         return """
         umask 077; \
         GCMD_BRIDGE_FILE="$(mktemp "${TMPDIR:-/tmp}/gcmd-bridge-XXXXXXXXXX")"; \
-        export GCMD_BRIDGE_FILE; \
         printf '%s' '\(encoded)' | base64 -d > "$GCMD_BRIDGE_FILE"; \
         chmod 700 "$GCMD_BRIDGE_FILE"; \
+        GCMD_HOOK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gcmd-hook-XXXXXXXXXX")"; \
         case "$(basename "${SHELL:-/bin/sh}")" in \
-          *bash*) exec "$SHELL" -il -c 'source "$GCMD_BRIDGE_FILE"; rm -f "$GCMD_BRIDGE_FILE"; exec "$SHELL" -il' ;; \
-          *) exec "$SHELL" -il -c 'source "$GCMD_BRIDGE_FILE"; rm -f "$GCMD_BRIDGE_FILE"; exec "$SHELL" -il' ;; \
+          *zsh*) \
+            printf '. "%s"; rm -f "%s"; rm -rf "%s"\\n[ -f "${HOME}/.zshrc" ] && . "${HOME}/.zshrc"\\n' \
+              "$GCMD_BRIDGE_FILE" "$GCMD_BRIDGE_FILE" "$GCMD_HOOK_DIR" > "$GCMD_HOOK_DIR/.zshrc"; \
+            ZDOTDIR="$GCMD_HOOK_DIR" exec "$SHELL" -il ;; \
+          *bash*) \
+            printf '. "%s"; rm -f "%s"; rm -rf "%s"\\n[ -f "${HOME}/.bashrc" ] && . "${HOME}/.bashrc"\\n' \
+              "$GCMD_BRIDGE_FILE" "$GCMD_BRIDGE_FILE" "$GCMD_HOOK_DIR" > "$GCMD_HOOK_DIR/gcmd-bashrc"; \
+            exec "$SHELL" --rcfile "$GCMD_HOOK_DIR/gcmd-bashrc" -i ;; \
+          *) \
+            printf '. "%s"; rm -f "%s"; rm -rf "%s"\\n' \
+              "$GCMD_BRIDGE_FILE" "$GCMD_BRIDGE_FILE" "$GCMD_HOOK_DIR" > "$GCMD_HOOK_DIR/.profile"; \
+            ENV="$GCMD_HOOK_DIR/.profile" exec "$SHELL" -i ;; \
         esac
         """
     }
