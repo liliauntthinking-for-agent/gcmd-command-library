@@ -20,6 +20,7 @@ func printUsage() {
           gcmd sync [--directory DIRECTORY] [--git]
           gcmd path
           gcmd doctor
+          gcmd ssh [--remote-port PORT] [--local-port PORT] SSH_ARGUMENTS...
           gcmd launch search
           gcmd launch save [--command COMMAND] [--cwd DIR]
           gcmd launch sync
@@ -168,6 +169,111 @@ func shellIntegrationCandidatesFromShellConfig() -> [URL] {
         }
     }
     return candidates
+}
+
+func runSSHBridge(_ arguments: ArraySlice<String>) -> Never {
+    var iterator = arguments.makeIterator()
+    var remotePort: UInt16 = UInt16.random(in: 20_000...45_000)
+    var localPort: UInt16 = 0
+    var sshArguments: [String] = []
+
+    while let argument = iterator.next() {
+        switch argument {
+        case "--remote-port":
+            guard let value = iterator.next(), let port = UInt16(value), port != 0 else {
+                printError("gcmd: --remote-port requires a non-zero port")
+                exit(2)
+            }
+            remotePort = port
+        case let value where value.hasPrefix("--remote-port="):
+            guard let port = UInt16(value.dropFirst(14)), port != 0 else {
+                printError("gcmd: --remote-port requires a non-zero port")
+                exit(2)
+            }
+            remotePort = port
+        case "--local-port":
+            guard let value = iterator.next(), let port = UInt16(value), port != 0 else {
+                printError("gcmd: --local-port requires a non-zero port")
+                exit(2)
+            }
+            localPort = port
+        case let value where value.hasPrefix("--local-port="):
+            guard let port = UInt16(value.dropFirst(13)), port != 0 else {
+                printError("gcmd: --local-port requires a non-zero port")
+                exit(2)
+            }
+            localPort = port
+        case "--help", "-h":
+            printUsage()
+            exit(0)
+        default:
+            sshArguments.append(argument)
+            while let remaining = iterator.next() {
+                sshArguments.append(remaining)
+            }
+        }
+    }
+
+    guard !sshArguments.isEmpty else {
+        printUsage()
+        exit(2)
+    }
+
+    let bridge: GcmdSSHBridgeServer
+    do {
+        bridge = try GcmdSSHBridgeServer(localPort: localPort)
+        if let configuredApp = ProcessInfo.processInfo.environment["GCMD_APP"], !configuredApp.isEmpty {
+            bridge.launchApp = { arguments in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                process.arguments = ["-n", configuredApp, "--args"] + arguments
+                try process.run()
+            }
+        } else {
+            let app = appURL()
+            bridge.launchApp = { arguments in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                process.arguments = ["-n", app.path, "--args"] + arguments
+                try process.run()
+            }
+        }
+        try bridge.start()
+    } catch {
+        printError("gcmd: \(error.localizedDescription)")
+        exit(1)
+    }
+
+    let remoteCommand = GcmdSSHBridge.remoteCommand(
+        remotePort: remotePort,
+        localPort: bridge.localPort,
+        token: bridge.token
+    )
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+    process.arguments = [
+        "-t",
+        "-o", "ExitOnForwardFailure=yes",
+        "-R", "127.0.0.1:\(remotePort):127.0.0.1:\(bridge.localPort)"
+    ] + sshArguments + [remoteCommand]
+
+    signal(SIGINT) { _ in exit(130) }
+    signal(SIGTERM) { _ in exit(143) }
+
+    do {
+        print("gcmd SSH bridge ready; SSH exit stops it.")
+        print("Remote shortcuts: Ctrl-G search, Ctrl-X save.")
+        try process.run()
+        process.waitUntilExit()
+    } catch {
+        bridge.stop()
+        printError("gcmd: \(error.localizedDescription)")
+        exit(1)
+    }
+
+    bridge.stop()
+    exit(process.terminationStatus)
 }
 
 func executablePath() -> URL {

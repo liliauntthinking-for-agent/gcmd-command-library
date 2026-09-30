@@ -467,6 +467,61 @@ Esc       返回或退出
 
 命令只会 insert（插入）到当前输入行，不会自动 execute（执行）。
 
+## ssh：在远端 shell 使用快捷键
+
+普通 `ssh user@server` 进入远端后，本地 zsh 不再接收 `Ctrl-G`。这是终端
+进程模型的正常行为，不是 Ghostty 或 gcmd 失效。
+
+改用 gcmd 的 SSH wrapper：
+
+```bash
+gcmd ssh user@example.com
+gcmd ssh -p 2222 deploy@example.com
+gcmd ssh --remote-port 23456 user@example.com
+gcmd ssh --local-port 34567 user@example.com
+```
+
+`--remote-port` 是远端 loopback listener（回环监听端口），默认随机选择。
+如果该端口已被占用或被远端 sshd 禁止转发，换一个端口重试。`--local-port`
+一般不需要设置；默认由 macOS 分配可用端口。
+
+wrapper 会：
+
+```text
+1. 在本机 127.0.0.1 启动 temporary bridge（临时桥接）
+2. 生成 one-time token（一次性令牌）
+3. 建立 SSH reverse tunnel（SSH 反向隧道）
+4. 在远端 zsh/bash 里加载 shortcuts（快捷键）
+5. SSH 退出时停止 bridge 和 tunnel
+```
+
+远端 shell 里的快捷键：
+
+```text
+Ctrl-G    唤起本机 gcmd search popup
+Ctrl-X    把远端当前输入行送入本机 save editor
+```
+
+popup 仍然运行在本地 Mac 上，因此使用的是本地 command library（命令库）。
+选中命令后，gcmd 会把它插入当前 focused Ghostty terminal（聚焦终端），
+也就是当前的 SSH 会话。
+
+安全限制：
+
+- 本地 bridge 只绑定 `127.0.0.1`。
+- URL 中包含 one-time token（一次性令牌）。
+- 远端 listener 也只绑定 `127.0.0.1`。
+- bridge 不是 daemon（守护进程）；只在 `gcmd ssh` 进程存活期间运行。
+- bridge 会在 source（加载）后删除远端临时 bootstrap file（引导文件）。
+
+如果远端显示 `gcmd: SSH bridge unavailable`：
+
+1. 看 SSH 启动时是否有 `Warning: remote port forwarding failed`。
+2. 用 `--remote-port PORT` 换端口。
+3. 确认远端 `curl` 可用。
+4. 确认远端 sshd 允许 loopback remote forwarding（回环远程转发）。
+5. 退出后重新执行 `gcmd ssh`，不要复用旧 SSH session（会话）。
+
 ## 常用 workflow（工作流）示例
 
 保存一条日常命令：
@@ -533,6 +588,11 @@ gcmd delete ID
 # 从 Warp 导入
 gcmd import-warp
 gcmd import-warp /path/to/warp.sqlite
+
+# SSH bridge（SSH 桥接）
+gcmd ssh user@example.com
+gcmd ssh -p 2222 user@example.com
+gcmd ssh --remote-port 23456 user@example.com
 
 # 同步
 gcmd sync init /path/to/data-repository

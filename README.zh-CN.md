@@ -81,6 +81,24 @@ zsh widget（zsh 输入组件）直接绑定 control key（控制键），按需
 source ~/.zshrc
 ```
 
+## SSH 会话
+
+直接运行 `ssh user@server` 后，`Ctrl-G` 不会生效，因为前台已经是远端
+shell，本地 zsh widget 不再处理按键。
+
+需要通过 SSH 使用 gcmd 时，改用：
+
+```bash
+gcmd ssh user@server
+gcmd ssh -p 2222 user@server
+gcmd ssh --remote-port 23456 user@server
+```
+
+这个 wrapper 只在 SSH 进程存活期间建立 loopback reverse tunnel。远端 zsh
+或 bash 里的 `Ctrl-G` 会通知本机临时启动 popup；选中命令后，仍会插入当前
+Ghostty 终端。远端 `Ctrl-X` 也可以保存当前输入行。退出远端 shell 后，
+tunnel 和本地 bridge 会一起结束。
+
 ## CLI 用法
 
 详细的 command options（命令选项）、variables（变量）、sync（同步）行为和

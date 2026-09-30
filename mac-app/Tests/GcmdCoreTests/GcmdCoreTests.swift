@@ -119,4 +119,70 @@ final class GcmdCoreTests: XCTestCase {
         XCTAssertEqual(try store.syncDirectory()?.standardizedFileURL.path, remote.standardizedFileURL.path)
         XCTAssertEqual(store.remoteRepositoryURL(), configuredURL)
     }
+
+    func testSSHBridgeDispatchesSearch() throws {
+        let bridge = try GcmdSSHBridgeServer(localPort: 0)
+        let launched = DispatchSemaphore(value: 0)
+        var receivedArguments: [String] = []
+        bridge.launchApp = { arguments in
+            receivedArguments = arguments
+            launched.signal()
+        }
+        try bridge.start()
+        defer { bridge.stop() }
+
+        let request = URLRequest(url: URL(string: "\(bridge.baseURL)/search")!)
+        let (_, response) = try URLSession.shared.synchronousData(for: request)
+
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(launched.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(receivedArguments, ["--search"])
+    }
+
+    func testSSHBridgeRejectsWrongToken() throws {
+        let bridge = try GcmdSSHBridgeServer(localPort: 0)
+        bridge.launchApp = { _ in
+            XCTFail("bridge must not launch the app for an invalid token")
+        }
+        try bridge.start()
+        defer { bridge.stop() }
+
+        let url = URL(string: "http://127.0.0.1:\(bridge.localPort)/wrong-token/search")!
+        let (_, response) = try URLSession.shared.synchronousData(for: URLRequest(url: url))
+
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 404)
+    }
+
+    func testRemoteCommandEmbedsPortsAndToken() {
+        let script = GcmdSSHBridge.remoteScript(
+            baseURL: "http://127.0.0.1:23456/bridge-token"
+        )
+        let command = GcmdSSHBridge.remoteCommand(
+            remotePort: 23456,
+            localPort: 34567,
+            token: "anything-encoded-in-script"
+        )
+
+        XCTAssertTrue(command.contains("mktemp"))
+        XCTAssertTrue(script.contains("http://127.0.0.1:23456/bridge-token"))
+        XCTAssertTrue(script.contains("gcmd-remote-search"))
+    }
+}
+
+private extension URLSession {
+    func synchronousData(for request: URLRequest) throws -> (Data, URLResponse) {
+        var result: Result<(Data, URLResponse), Error>?
+        let semaphore = DispatchSemaphore(value: 0)
+        dataTask(with: request) { data, response, error in
+            if let error {
+                result = .failure(error)
+            } else {
+                result = .success((data ?? Data(), response!))
+            }
+            semaphore.signal()
+        }.resume()
+        semaphore.wait()
+
+        return try result!.get()
+    }
 }

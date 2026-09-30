@@ -87,6 +87,25 @@ Reload your shell, then run:
 source ~/.zshrc
 ```
 
+## SSH sessions
+
+After running plain `ssh user@server`, `Ctrl-G` belongs to the remote shell, so
+the local zsh widget no longer receives it.
+
+Use the SSH wrapper when you need gcmd on a remote machine:
+
+```bash
+gcmd ssh user@server
+gcmd ssh -p 2222 user@server
+gcmd ssh --remote-port 23456 user@server
+```
+
+The wrapper keeps a loopback reverse tunnel alive only while SSH is running.
+`Ctrl-G` in the remote zsh or bash session asks the local machine to start the
+on-demand popup. The selected command is inserted into the focused Ghostty
+terminal. `Ctrl-X` saves the remote input line. Exiting the remote shell stops
+the tunnel and bridge.
+
 ## CLI
 
 For the detailed command reference, option behavior, variables, sync rules,

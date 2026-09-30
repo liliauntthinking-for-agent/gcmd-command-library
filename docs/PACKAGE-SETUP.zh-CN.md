@@ -94,6 +94,15 @@ Cmd-E         编辑选中命令
 
 选中的命令只会插入当前输入行，不会自动执行。
 
+直接 `ssh` 到服务器以后，本地快捷键不会再被处理。需要远端会话时使用：
+
+```bash
+gcmd ssh user@server
+```
+
+这个命令只在 SSH 会话期间建立 temporary bridge（临时桥接）。详见
+[CLI 使用手册](CLI.zh-CN.md)中的 `ssh` 说明。
+
 ## 4. 准备 data repository
 
 命令数据使用独立的 private repository（私有仓库）：

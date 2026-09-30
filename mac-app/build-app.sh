@@ -102,7 +102,10 @@ echo "Using swiftc: $SWIFTC_BIN"
 echo "Developer directory: ${DEVELOPER_DIR_PATH:-unknown}"
 echo "SDK: $SDK_PATH"
 
-CORE_SOURCE="$ROOT/mac-app/Sources/GcmdCore/GcmdCore.swift"
+CORE_SOURCES=(
+    "$ROOT/mac-app/Sources/GcmdCore/GcmdCore.swift"
+    "$ROOT/mac-app/Sources/GcmdCore/SSHBridge.swift"
+)
 APP_SOURCE="$ROOT/mac-app/Sources/GcmdApp/main.swift"
 CLI_SOURCE="$ROOT/mac-app/Sources/GcmdCLI/main.swift"
 BUILD_DIR="$(mktemp -d)"
@@ -120,9 +123,20 @@ compile_core_module() {
         -module-name GcmdCore \
         -emit-module \
         -emit-module-path "$output_directory/GcmdCore.swiftmodule" \
-        -c \
-        -o "$output_directory/GcmdCore.o" \
-        "$CORE_SOURCE"
+        "${CORE_SOURCES[@]}"
+
+    local core_source
+    for core_source in "${CORE_SOURCES[@]}"; do
+        "$SWIFTC_BIN" \
+            -sdk "$SDK_PATH" \
+            -O \
+            -parse-as-library \
+            -target "${architecture}-apple-macos${MINIMUM_MACOS}" \
+            -module-name GcmdCore \
+            -c \
+            -o "$output_directory/$(basename "$core_source" .swift).o" \
+            "$core_source"
+    done
 }
 
 compile_binary() {
@@ -131,13 +145,17 @@ compile_binary() {
     local is_application="$3"
     shift 3
     local output_directory="$BUILD_DIR/$architecture"
+    local -a core_objects=(
+        "$output_directory/GcmdCore.o"
+        "$output_directory/SSHBridge.o"
+    )
 
     local -a arguments=(
         -sdk "$SDK_PATH"
         -O
         -target "${architecture}-apple-macos${MINIMUM_MACOS}"
         -I "$output_directory"
-        "$output_directory/GcmdCore.o"
+        "${core_objects[@]}"
         -o "$output"
     )
     if [[ "$is_application" == "true" ]]; then
@@ -186,6 +204,7 @@ This package contains:
 - gcmd.app: the on-demand macOS popup app
 - gcmd: the CLI launcher used by zsh shortcuts
 - gcmd.zsh: the shell integration for Ctrl-G and Ctrl-X
+- gcmd ssh DESTINATION: optional bridge for shortcuts during SSH sessions
 
 Keep these files in one folder. Add that folder to PATH and source gcmd.zsh:
 
