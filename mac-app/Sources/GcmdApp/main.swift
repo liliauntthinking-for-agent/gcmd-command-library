@@ -364,6 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        setupEditMenu()
         setupStatusItem()
         let arguments = Array(CommandLine.arguments.dropFirst())
         model.onFinish = { NSApp.terminate(nil) }
@@ -371,6 +372,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.showPopup(mode: self?.model.mode ?? .search)
         }
+    }
+
+    private func setupEditMenu() {
+        let menu = NSMenu()
+        let editItem = NSMenuItem(title: "编辑", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "编辑")
+        let actions: [(String, String, String)] = [
+            ("撤销", "undo:", "z"),
+            ("剪切", "cut:", "x"),
+            ("复制", "copy:", "c"),
+            ("粘贴", "paste:", "v"),
+            ("全选", "selectAll:", "a")
+        ]
+        for (title, action, key) in actions {
+            editMenu.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        }
+        editItem.submenu = editMenu
+        menu.addItem(editItem)
+        NSApp.mainMenu = menu
     }
 
     private func setupStatusItem() {
@@ -492,9 +512,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.handleEscape()
                 return nil
             }
-            if self.handleControlEditingShortcut(event) {
-                return nil
-            }
             if self.model.mode == .parameters {
                 if event.keyCode == 36 || event.keyCode == 76 {
                     self.model.insertParameters()
@@ -520,26 +537,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return event
             }
         }
-    }
-
-    private func handleControlEditingShortcut(_ event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard modifiers == [.control], panel?.firstResponder != nil else {
-            return false
-        }
-
-        let selectorName: String?
-        switch event.keyCode {
-        case 0: selectorName = "selectAll:"
-        case 7: selectorName = "cut:"
-        case 8: selectorName = "copy:"
-        case 9: selectorName = "paste:"
-        case 6: selectorName = "undo:"
-        default: selectorName = nil
-        }
-
-        guard let selectorName else { return false }
-        return NSApp.sendAction(Selector(selectorName), to: nil, from: nil)
     }
 
     private func removeKeyMonitor() {
