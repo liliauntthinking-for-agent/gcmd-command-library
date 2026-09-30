@@ -281,6 +281,7 @@ public enum GcmdSSHBridge {
         """
         GCMD_BRIDGE_URL="\(baseURL)"
         export GCMD_BRIDGE_URL
+        stty sane 2>/dev/null
 
         function _gcmd_bridge_message() {
           if [ -n "$ZSH_VERSION" ]; then
