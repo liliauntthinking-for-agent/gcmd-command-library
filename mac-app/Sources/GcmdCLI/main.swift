@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import GcmdCore
 
@@ -250,33 +251,29 @@ func runSSHBridge(_ arguments: ArraySlice<String>) -> Never {
         token: bridge.token
     )
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-    process.standardInput = FileHandle.standardInput
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
-    process.arguments = [
-        "-t",
-        "-o", "ExitOnForwardFailure=yes",
-        "-R", "127.0.0.1:\(remotePort):127.0.0.1:\(bridge.localPort)"
-    ] + sshArguments + [remoteCommand]
+    print("gcmd SSH bridge ready; SSH exit stops it.")
+    print("Remote shortcuts: Ctrl-G search, Ctrl-X save.")
+    fflush(stdout)
 
-    signal(SIGINT) { _ in exit(130) }
-    signal(SIGTERM) { _ in exit(143) }
-
-    do {
-        print("gcmd SSH bridge ready; SSH exit stops it.")
-        print("Remote shortcuts: Ctrl-G search, Ctrl-X save.")
-        try process.run()
-        process.waitUntilExit()
-    } catch {
-        bridge.stop()
-        printError("gcmd: \(error.localizedDescription)")
-        exit(1)
+    // Replace this process with ssh so the TTY is passed through directly.
+    var argv: [UnsafeMutablePointer<CChar>?] = []
+    argv.append(strdup("ssh"))
+    argv.append(strdup("-t"))
+    argv.append(strdup("-o"))
+    argv.append(strdup("ExitOnForwardFailure=yes"))
+    argv.append(strdup("-R"))
+    argv.append(strdup("127.0.0.1:\(remotePort):127.0.0.1:\(bridge.localPort)"))
+    for argument in sshArguments {
+        argv.append(strdup(argument))
     }
+    argv.append(strdup(remoteCommand))
+    argv.append(nil)
+
+    execv("/usr/bin/ssh", &argv)
 
     bridge.stop()
-    exit(process.terminationStatus)
+    printError("gcmd: failed to exec ssh")
+    exit(1)
 }
 
 func executablePath() -> URL {
