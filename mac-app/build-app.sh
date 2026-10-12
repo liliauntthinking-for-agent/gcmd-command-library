@@ -195,6 +195,7 @@ make_package() {
     chmod +x "$stage/gcmd"
     codesign --force --sign - "$stage/gcmd" >/dev/null 2>&1 || true
     cp "$ROOT/gcmd/shell/gcmd.zsh" "$stage/gcmd.zsh"
+    cp "$ROOT/gcmd/shell/gcmd-ssh.zsh" "$stage/gcmd-ssh.zsh"
 
     cat > "$stage/README.txt" <<EOF
 gcmd macOS build
@@ -204,6 +205,7 @@ This package contains:
 - gcmd.app: the on-demand macOS popup app
 - gcmd: the CLI launcher used by zsh shortcuts
 - gcmd.zsh: the shell integration for Ctrl-G and Ctrl-X
+- gcmd-ssh.zsh: the SSH integration loaded by gcmd.zsh
 - gcmd ssh DESTINATION: optional bridge for shortcuts during SSH sessions
 
 Keep these files in one folder. Add that folder to PATH and source gcmd.zsh:

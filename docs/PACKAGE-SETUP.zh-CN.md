@@ -37,6 +37,7 @@ package 里包含这些文件：
 gcmd.app    macOS popup app（弹窗应用）
 gcmd        CLI launcher（命令行启动器）
 gcmd.zsh    zsh shortcut integration（zsh 快捷键集成）
+gcmd-ssh.zsh 交互式 SSH 快捷键集成（由 gcmd.zsh 加载）
 README.txt  使用说明
 ```
 
@@ -80,7 +81,7 @@ source "$HOME/Tools/gcmd-macos-x86_64/gcmd.zsh"
 exec zsh
 ```
 
-`gcmd.app`、`gcmd`、`gcmd.zsh` 必须保持在同一个 folder（目录）。
+`gcmd.app`、`gcmd`、`gcmd.zsh`、`gcmd-ssh.zsh` 必须保持在同一个 folder（目录）。
 `gcmd.zsh` 会自动找到旁边的 app 和 CLI。
 
 快捷键：
